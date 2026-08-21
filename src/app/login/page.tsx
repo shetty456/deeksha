@@ -2,13 +2,11 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 
 type Mode = "signin" | "signup"
 
 export default function LoginPage() {
-  const router = useRouter()
   const [mode, setMode] = useState<Mode>("signin")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -37,8 +35,7 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
       } else {
-        router.push("/dashboard")
-        router.refresh()
+        window.location.href = "/dashboard"
       }
     }
 
