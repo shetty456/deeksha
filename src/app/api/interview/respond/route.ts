@@ -48,14 +48,22 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder()
   const readable = new ReadableStream({
     async start(controller) {
+      let bytesWritten = 0
       try {
         for await (const chunk of stream) {
           const text = chunk.choices[0]?.delta?.content
-          if (text) controller.enqueue(encoder.encode(text))
+          if (text) {
+            const encoded = encoder.encode(text)
+            controller.enqueue(encoded)
+            bytesWritten += encoded.byteLength
+          }
         }
       } catch (err) {
         console.error("[respond] Stream error:", err)
       } finally {
+        if (bytesWritten === 0) {
+          console.warn("[respond] LLM stream produced 0 bytes — model returned empty response")
+        }
         controller.close()
       }
     },

@@ -179,6 +179,56 @@ export default function InterviewClient({
     recog.unmute()
 
     if (!isMountedRef.current) return null
+
+    if (!full.trim()) {
+      // LLM returned empty — recover state so the user isn't stuck on "Speaking"
+      devLog.push("error", "LLM empty response — retrying")
+      setAudioState("thinking")
+      await new Promise(r => setTimeout(r, 600))
+      if (!isMountedRef.current) return null
+
+      // One retry with the same context
+      const retry = await fetch("/api/interview/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ctx),
+      })
+      devLog.push("res", "← retry respond", String(retry.status))
+      if (!retry.ok || !retry.body || !isMountedRef.current) {
+        setAudioState("listening")
+        return null
+      }
+
+      const retryReader  = retry.body.getReader()
+      const retryDecoder = new TextDecoder()
+      let retryFull = ""
+
+      async function* retryStream(): AsyncIterable<string> {
+        while (true) {
+          const { done, value } = await retryReader.read()
+          if (done) break
+          retryFull += retryDecoder.decode(value, { stream: true })
+          yield retryDecoder.decode(value)
+        }
+      }
+
+      recog.mute()
+      setAudioState("speaking")
+      const retryTtsStart = Date.now()
+      devLog.push("tts", "→ TTS retry")
+      await synth.speak(retryStream())
+      devLog.push("tts", "← TTS retry done", `"${retryFull.slice(0, 40)}"`, Date.now() - retryTtsStart)
+      recog.unmute()
+
+      if (!isMountedRef.current) return null
+      if (!retryFull.trim()) {
+        devLog.push("error", "retry also empty — skipping turn")
+        setAudioState("listening")
+        return null
+      }
+      return retryFull
+    }
+
     return full
   }, [])
 
