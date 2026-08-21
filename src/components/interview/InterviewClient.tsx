@@ -343,27 +343,40 @@ export default function InterviewClient({
           </button>
         </div>
 
-        {/* Right — transcript (15% of desktop width, plain text) */}
+        {/* Right — transcript (15% of desktop width, plain text log) */}
         <div
-          className="hidden lg:flex flex-col overflow-hidden"
-          style={{ width: "15%", borderLeft: "1px solid rgba(255,255,255,0.06)" }}
+          className="hidden lg:flex flex-col flex-shrink-0 overflow-hidden"
+          style={{ width: "15%", borderLeft: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.02)" }}
         >
-          <div className="flex-1 overflow-y-auto px-3 py-5 space-y-4">
+          {/* Header */}
+          <div className="px-3 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="text-[9px] uppercase tracking-widest font-medium" style={{ color: "rgba(255,255,255,0.3)" }}>
+              Transcript
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
+            {turns.length === 0 && (
+              <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.15)" }}>
+                Conversation will appear here…
+              </p>
+            )}
+
             {turns.map((turn) => (
               <div key={turn.id} className="space-y-0.5">
-                <p className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.22)" }}>
+                <p className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>
                   {turn.speaker === "interviewer" ? "AI" : "Me"}
                 </p>
-                <p className="text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>
+                <p className="text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
                   {turn.text}
                 </p>
               </div>
             ))}
 
             {partialTranscript && (
-              <div className="space-y-0.5 opacity-40">
-                <p className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.22)" }}>Me</p>
-                <p className="text-[11px] leading-relaxed italic" style={{ color: "rgba(255,255,255,0.5)" }}>
+              <div className="space-y-0.5 opacity-50">
+                <p className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>Me</p>
+                <p className="text-[11px] leading-relaxed italic" style={{ color: "rgba(255,255,255,0.55)" }}>
                   {partialTranscript}
                 </p>
               </div>
