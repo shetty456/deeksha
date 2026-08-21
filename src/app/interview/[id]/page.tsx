@@ -21,7 +21,7 @@ export default async function InterviewPage({ params }: Props) {
     .eq("user_id", user.id)
     .single()
 
-  if (!interview) redirect("/")
+  if (!interview) redirect("/dashboard")
   if (interview.status === "completed") redirect(`/results/${id}`)
 
   // Pick a question for this interview

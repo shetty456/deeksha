@@ -1,6 +1,9 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
+// Paths that anyone can access without being signed in
+const PUBLIC_PATHS = ["/", "/login", "/auth/callback"]
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -25,25 +28,24 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Public paths that don't require auth
-  const publicPaths = ["/login", "/auth/callback"]
-  const isPublicPath = publicPaths.some((p) => pathname.startsWith(p))
+  const isPublic = PUBLIC_PATHS.some((p) =>
+    p === "/" ? pathname === "/" : pathname.startsWith(p)
+  )
 
-  if (!user && !isPublicPath) {
+  // Unauthenticated user hitting a protected route → login
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)
   }
 
+  // Authenticated user hitting login → dashboard
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone()
-    url.pathname = "/"
+    url.pathname = "/dashboard"
     return NextResponse.redirect(url)
   }
 

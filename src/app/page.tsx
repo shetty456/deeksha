@@ -1,19 +1,197 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
-import HomeClient from "@/components/home/HomeClient"
+import Link from "next/link"
 
-export default async function HomePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+const FEATURES = [
+  {
+    icon: "🎙️",
+    title: "Real-time voice conversation",
+    body: "Speak naturally. The AI interviewer listens, responds, and follows up — just like a real PM interview.",
+  },
+  {
+    icon: "⚡",
+    title: "Sub-second response latency",
+    body: "No waiting. The interviewer begins responding the moment you finish speaking.",
+  },
+  {
+    icon: "🔁",
+    title: "Intelligent follow-ups",
+    body: "Vague answers get challenged. Strong reasoning gets pushed deeper. The AI adapts to what you actually say.",
+  },
+  {
+    icon: "📊",
+    title: "Structured feedback",
+    body: "After every session, get scored across structure, product thinking, metrics, prioritization, and communication.",
+  },
+]
 
-  if (!user) redirect("/login")
+const CATEGORIES = [
+  "Product Sense",
+  "Product Strategy",
+  "Execution",
+  "Metrics",
+  "Estimation",
+  "Behavioral",
+  "Growth",
+]
 
-  const { data: recentInterviews } = await supabase
-    .from("interviews")
-    .select("id, category, difficulty, status, overall_score, created_at, ended_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(5)
+export default function HomePage() {
+  return (
+    <div className="min-h-dvh bg-bg-primary">
+      {/* Nav */}
+      <nav className="sticky top-0 z-50 bg-bg-primary/80 backdrop-blur-xl border-b border-separator">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+          <span className="text-base font-semibold text-label-primary tracking-tight">
+            Deeksha
+          </span>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/login"
+              className="text-sm font-medium text-accent hover:opacity-80 transition-opacity px-3 py-1.5"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/login"
+              className="text-sm font-medium bg-accent text-accent-foreground px-4 py-2 rounded-xl hover:opacity-90 transition-opacity"
+            >
+              Get started
+            </Link>
+          </div>
+        </div>
+      </nav>
 
-  return <HomeClient user={user} recentInterviews={recentInterviews ?? []} />
+      {/* Hero */}
+      <section className="max-w-5xl mx-auto px-6 pt-20 pb-24 text-center">
+        <div className="inline-flex items-center gap-2 bg-bg-card border border-separator rounded-full px-4 py-1.5 text-xs font-medium text-label-secondary mb-8">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
+          Voice-first · Real-time · AI-powered
+        </div>
+
+        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-label-primary leading-tight mb-6">
+          Practice PM interviews
+          <br />
+          <span className="text-accent">like the real thing.</span>
+        </h1>
+
+        <p className="text-lg sm:text-xl text-label-secondary max-w-xl mx-auto leading-relaxed mb-10">
+          A real-time AI interviewer that listens, follows up, and challenges
+          your thinking — so you are ready when it counts.
+        </p>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/login"
+            className="w-full sm:w-auto inline-flex items-center justify-center bg-accent text-accent-foreground font-semibold text-base px-8 py-4 rounded-2xl hover:opacity-90 transition-opacity"
+          >
+            Start practicing free
+          </Link>
+          <a
+            href="#how-it-works"
+            className="w-full sm:w-auto inline-flex items-center justify-center bg-bg-card text-label-primary font-semibold text-base px-8 py-4 rounded-2xl border border-separator hover:border-label-tertiary transition-colors"
+          >
+            See how it works
+          </a>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how-it-works" className="max-w-5xl mx-auto px-6 pb-24">
+        <div className="bg-bg-card rounded-2xl p-8 sm:p-12 space-y-10">
+          <div className="text-center space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-accent">
+              How it works
+            </p>
+            <h2 className="text-3xl font-bold tracking-tight text-label-primary">
+              A real interview. No scripts.
+            </h2>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-6 text-center">
+            {[
+              { step: "1", title: "Pick your interview", body: "Choose category, difficulty, and duration. Start in seconds." },
+              { step: "2", title: "Talk naturally", body: "Speak into your mic. The AI listens, thinks, and responds in real time." },
+              { step: "3", title: "Get feedback", body: "After the interview, see your score across every PM dimension." },
+            ].map(({ step, title, body }) => (
+              <div key={step} className="space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent font-bold text-lg flex items-center justify-center mx-auto">
+                  {step}
+                </div>
+                <p className="font-semibold text-label-primary">{title}</p>
+                <p className="text-sm text-label-secondary leading-relaxed">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="max-w-5xl mx-auto px-6 pb-24">
+        <div className="text-center mb-10 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-accent">
+            Features
+          </p>
+          <h2 className="text-3xl font-bold tracking-tight text-label-primary">
+            Built to make you better.
+          </h2>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          {FEATURES.map((f) => (
+            <div
+              key={f.title}
+              className="bg-bg-card rounded-2xl p-6 border border-separator space-y-3"
+            >
+              <span className="text-3xl">{f.icon}</span>
+              <p className="font-semibold text-label-primary">{f.title}</p>
+              <p className="text-sm text-label-secondary leading-relaxed">{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="max-w-5xl mx-auto px-6 pb-24">
+        <div className="bg-bg-card rounded-2xl p-8 sm:p-10 text-center space-y-6">
+          <h2 className="text-2xl font-bold tracking-tight text-label-primary">
+            7 interview types. 600+ questions.
+          </h2>
+          <div className="flex flex-wrap justify-center gap-2">
+            {CATEGORIES.map((c) => (
+              <span
+                key={c}
+                className="bg-accent/10 text-accent text-sm font-medium px-4 py-2 rounded-xl"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="max-w-5xl mx-auto px-6 pb-24">
+        <div className="bg-accent rounded-2xl p-10 sm:p-14 text-center space-y-6">
+          <h2 className="text-3xl font-bold text-white tracking-tight">
+            Ready to get better?
+          </h2>
+          <p className="text-white/80 text-base">
+            Your next PM interview is closer than you think.
+          </p>
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center bg-white text-accent font-semibold text-base px-8 py-4 rounded-2xl hover:opacity-90 transition-opacity"
+          >
+            Start for free
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-separator py-8">
+        <div className="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-label-tertiary">
+          <span className="font-semibold text-label-secondary">Deeksha</span>
+          <span>Real-time AI PM interview practice</span>
+        </div>
+      </footer>
+    </div>
+  )
 }

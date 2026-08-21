@@ -20,7 +20,7 @@ export default async function ResultsPage({ params }: Props) {
     .eq("user_id", user.id)
     .single()
 
-  if (!interview) redirect("/")
+  if (!interview) redirect("/dashboard")
 
   const { data: evaluation } = await supabase
     .from("evaluations")

@@ -74,7 +74,7 @@ export default function ResultsClient({ interview, evaluation, transcript }: Pro
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-5 border-b border-border">
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/dashboard")}
           className="text-sm text-text-secondary hover:text-text-primary transition-colors"
         >
           ← Home
@@ -217,7 +217,7 @@ export default function ResultsClient({ interview, evaluation, transcript }: Pro
 
         {/* CTA */}
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/dashboard")}
           className="w-full rounded-2xl bg-accent px-6 py-4 text-base font-semibold text-accent-foreground hover:opacity-90 transition-opacity"
         >
           Practice Again
