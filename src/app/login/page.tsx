@@ -42,10 +42,10 @@ export default function LoginPage() {
     <div className="min-h-dvh flex">
 
       {/* ── Left panel ─────────────────────────────────────── */}
-      <div className="hidden lg:flex lg:w-[48%] bg-accent flex-col justify-center items-center p-12">
+      <div className="hidden lg:flex lg:w-[48%] bg-[#09090b] flex-col justify-center items-center p-12">
         <div className="space-y-3 text-center">
           <p className="text-white font-bold text-3xl tracking-tight">Deeksha</p>
-          <p className="text-white/60 text-sm">PM interview practice, elevated.</p>
+          <p className="text-white/40 text-sm">PM interview practice, elevated.</p>
         </div>
       </div>
 
