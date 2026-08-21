@@ -29,23 +29,26 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
     this.stream = null
   }
 
-  /** Pause sending audio to Deepgram while AI is speaking (prevents echo) */
   mute(): void { this.muted = true }
   unmute(): void { this.muted = false }
 
   startListening(): void {
     if (!this.apiKey || !this.stream) return
 
+    // Detect the best supported mimeType
+    const mimeType =
+      MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
+      : MediaRecorder.isTypeSupported("audio/webm")           ? "audio/webm"
+      : ""
+
+    // Do NOT set encoding/sample_rate — let Deepgram auto-detect the container
     const params = new URLSearchParams({
-      model: "nova-3",
-      language: "en-US",
-      smart_format: "true",
+      model:           "nova-2",
+      language:        "en-US",
+      smart_format:    "true",
       interim_results: "true",
-      endpointing: "400",
-      vad_events: "true",
-      encoding: "linear16",
-      sample_rate: "16000",
-      channels: "1",
+      endpointing:     "400",   // ms of silence = end of utterance
+      punctuate:       "true",
     })
 
     this.ws = new WebSocket(
@@ -55,33 +58,27 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
 
     this.ws.onopen = () => {
       if (!this.stream) return
-      this.mediaRecorder = new MediaRecorder(this.stream, {
-        mimeType: "audio/webm;codecs=opus",
-      })
+      const options: MediaRecorderOptions = mimeType ? { mimeType } : {}
+      this.mediaRecorder = new MediaRecorder(this.stream, options)
+
       this.mediaRecorder.ondataavailable = (e) => {
         if (this.muted) return
         if (e.data.size > 0 && this.ws?.readyState === WebSocket.OPEN) {
           this.ws.send(e.data)
         }
       }
-      this.mediaRecorder.start(100)
+
+      this.mediaRecorder.start(250) // 250ms chunks
     }
 
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
 
-        if (data.type === "SpeechStarted") {
-          this.speechStartedCallback?.()
-          return
-        }
-        if (data.type === "UtteranceEnd") {
-          this.speechEndedCallback?.()
-          return
-        }
         if (data.type === "Results") {
           const alt = data.channel?.alternatives?.[0]
           if (!alt?.transcript) return
+
           if (data.is_final && data.speech_final) {
             this.finalCallback?.(alt.transcript)
           } else if (!data.is_final) {
@@ -93,8 +90,15 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
       }
     }
 
-    this.ws.onerror = () => {
+    this.ws.onerror = (e) => {
+      console.error("[deepgram] WebSocket error", e)
       this.errorCallback?.(new Error("Deepgram WebSocket error"))
+    }
+
+    this.ws.onclose = (e) => {
+      if (e.code !== 1000) {
+        console.warn("[deepgram] WebSocket closed unexpectedly", e.code, e.reason)
+      }
     }
   }
 
@@ -106,8 +110,8 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
   }
 
   onPartialTranscript(cb: (text: string) => void) { this.partialCallback = cb }
-  onFinalTranscript(cb: (text: string) => void) { this.finalCallback = cb }
-  onSpeechStarted(cb: () => void) { this.speechStartedCallback = cb }
-  onSpeechEnded(cb: () => void) { this.speechEndedCallback = cb }
-  onError(cb: (e: Error) => void) { this.errorCallback = cb }
+  onFinalTranscript(cb: (text: string) => void)   { this.finalCallback = cb }
+  onSpeechStarted(cb: () => void)  { this.speechStartedCallback = cb }
+  onSpeechEnded(cb: () => void)    { this.speechEndedCallback = cb }
+  onError(cb: (e: Error) => void)  { this.errorCallback = cb }
 }

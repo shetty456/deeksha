@@ -217,7 +217,19 @@ export default function InterviewClient({
         rafRef.current = requestAnimationFrame(pollAmp)
 
         // Wire STT callbacks
-        recognizer.onPartialTranscript((text) => setPartialTranscript(text))
+        recognizer.onPartialTranscript((text) => {
+          setPartialTranscript(text)
+          // Barge-in: first partial while AI is speaking → interrupt
+          setAudioState((prev) => {
+            if (prev === "speaking") {
+              synthesizerRef.current?.interrupt()
+              recognizerRef.current?.unmute()
+              logEvent("ai_interrupted")
+              return "interrupted"
+            }
+            return prev
+          })
+        })
         recognizer.onFinalTranscript((text) => {
           if (!text.trim()) return
           handleCandidateTurn(text)
