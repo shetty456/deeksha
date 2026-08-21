@@ -82,7 +82,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="w-full bg-bg-primary border border-separator rounded-xl px-4 py-3 text-sm text-label-primary placeholder:text-label-tertiary outline-none focus:border-accent transition-colors"
+                  className="w-full bg-bg-primary border border-separator rounded-md px-4 py-3 text-sm text-label-primary placeholder:text-label-tertiary outline-none focus:border-accent transition-colors"
                 />
               </div>
 
@@ -103,18 +103,18 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   required
                   minLength={6}
-                  className="w-full bg-bg-primary border border-separator rounded-xl px-4 py-3 text-sm text-label-primary placeholder:text-label-tertiary outline-none focus:border-accent transition-colors"
+                  className="w-full bg-bg-primary border border-separator rounded-md px-4 py-3 text-sm text-label-primary placeholder:text-label-tertiary outline-none focus:border-accent transition-colors"
                 />
               </div>
 
               {/* Error / success */}
               {error && (
-                <p className="text-xs text-destructive bg-destructive/8 rounded-xl px-3 py-2">
+                <p className="text-xs text-destructive bg-destructive/8 rounded-md px-3 py-2">
                   {error}
                 </p>
               )}
               {success && (
-                <p className="text-xs text-accent bg-accent/8 rounded-xl px-3 py-2">
+                <p className="text-xs text-accent bg-accent/8 rounded-md px-3 py-2">
                   {success}
                 </p>
               )}
@@ -123,7 +123,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading || !email || !password}
-                className="w-full bg-accent text-accent-foreground font-semibold text-sm py-3.5 rounded-xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40"
+                className="w-full bg-accent text-accent-foreground font-semibold text-sm py-3.5 rounded-md hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40"
               >
                 {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
               </button>

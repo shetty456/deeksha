@@ -114,7 +114,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
                     key={cat.id}
                     onClick={() => setCategory(cat.id)}
                     className={cn(
-                      "text-left rounded-xl px-3.5 py-3 border text-sm transition-all",
+                      "text-left rounded-md px-3.5 py-3 border text-sm transition-all",
                       category === cat.id
                         ? "bg-accent text-accent-foreground border-accent"
                         : "bg-bg-primary border-separator text-label-primary hover:border-accent/40"
@@ -142,7 +142,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
                       key={d.value}
                       onClick={() => setDifficulty(d.value)}
                       className={cn(
-                        "rounded-xl px-3.5 py-2.5 border text-sm font-medium text-left transition-all",
+                        "rounded-md px-3.5 py-2.5 border text-sm font-medium text-left transition-all",
                         difficulty === d.value
                           ? "bg-accent text-accent-foreground border-accent"
                           : "bg-bg-primary border-separator text-label-primary hover:border-accent/40"
@@ -162,7 +162,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
                       key={d.seconds}
                       onClick={() => setDuration(d.seconds)}
                       className={cn(
-                        "rounded-xl px-3.5 py-2.5 border text-sm font-medium text-left transition-all",
+                        "rounded-md px-3.5 py-2.5 border text-sm font-medium text-left transition-all",
                         duration === d.seconds
                           ? "bg-accent text-accent-foreground border-accent"
                           : "bg-bg-primary border-separator text-label-primary hover:border-accent/40"
@@ -181,7 +181,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
             <button
               onClick={handleStart}
               disabled={starting}
-              className="w-full bg-accent text-accent-foreground font-semibold text-base py-4 rounded-xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full bg-accent text-accent-foreground font-semibold text-base py-4 rounded-md hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
             >
               {starting ? "Starting…" : "Start Interview"}
             </button>

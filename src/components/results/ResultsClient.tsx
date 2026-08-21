@@ -218,7 +218,7 @@ export default function ResultsClient({ interview, evaluation, transcript }: Pro
         {/* CTA */}
         <button
           onClick={() => router.push("/dashboard")}
-          className="w-full rounded-2xl bg-accent px-6 py-4 text-base font-semibold text-accent-foreground hover:opacity-90 transition-opacity"
+          className="w-full rounded-md bg-accent px-6 py-4 text-base font-semibold text-accent-foreground hover:opacity-90 transition-opacity"
         >
           Practice Again
         </button>

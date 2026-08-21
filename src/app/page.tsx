@@ -51,7 +51,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/login"
-              className="text-sm font-medium bg-accent text-accent-foreground px-4 py-2 rounded-xl hover:opacity-90 transition-opacity"
+              className="text-sm font-medium bg-accent text-accent-foreground px-4 py-2 rounded-md hover:opacity-90 transition-opacity"
             >
               Get started
             </Link>
@@ -80,13 +80,13 @@ export default function HomePage() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/login"
-            className="w-full sm:w-auto inline-flex items-center justify-center bg-accent text-accent-foreground font-semibold text-base px-8 py-4 rounded-2xl hover:opacity-90 transition-opacity"
+            className="w-full sm:w-auto inline-flex items-center justify-center bg-accent text-accent-foreground font-semibold text-base px-8 py-4 rounded-md hover:opacity-90 transition-opacity"
           >
             Start practicing free
           </Link>
           <a
             href="#how-it-works"
-            className="w-full sm:w-auto inline-flex items-center justify-center bg-bg-card text-label-primary font-semibold text-base px-8 py-4 rounded-2xl border border-separator hover:border-label-tertiary transition-colors"
+            className="w-full sm:w-auto inline-flex items-center justify-center bg-bg-card text-label-primary font-semibold text-base px-8 py-4 rounded-md border border-separator hover:border-label-tertiary transition-colors"
           >
             See how it works
           </a>
@@ -158,7 +158,7 @@ export default function HomePage() {
             {CATEGORIES.map((c) => (
               <span
                 key={c}
-                className="bg-accent/10 text-accent text-sm font-medium px-4 py-2 rounded-xl"
+                className="bg-accent/10 text-accent text-sm font-medium px-4 py-2 rounded-md"
               >
                 {c}
               </span>
@@ -178,7 +178,7 @@ export default function HomePage() {
           </p>
           <Link
             href="/login"
-            className="inline-flex items-center justify-center bg-white text-accent font-semibold text-base px-8 py-4 rounded-2xl hover:opacity-90 transition-opacity"
+            className="inline-flex items-center justify-center bg-white text-accent font-semibold text-base px-8 py-4 rounded-md hover:opacity-90 transition-opacity"
           >
             Start for free
           </Link>
