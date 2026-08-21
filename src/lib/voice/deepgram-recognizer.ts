@@ -6,12 +6,12 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
   private stream: MediaStream | null = null
   private apiKey: string | null = null
   private muted = false
+  private isListening = false   // true while we expect to be transcribing
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null
+  private mimeType = ""
 
   private partialCallback: ((text: string) => void) | null = null
   private finalCallback: ((text: string) => void) | null = null
-  private speechStartedCallback: (() => void) | null = null
-  private speechEndedCallback: (() => void) | null = null
   private errorCallback: ((e: Error) => void) | null = null
 
   async connect(): Promise<void> {
@@ -19,12 +19,17 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
     const { key } = await res.json()
     this.apiKey = key
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    this.mimeType =
+      MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
+      : MediaRecorder.isTypeSupported("audio/webm")           ? "audio/webm"
+      : ""
   }
 
   disconnect(): void {
+    this.isListening = false
     this.stopKeepAlive()
-    this.ws?.close()
     this.mediaRecorder?.stop()
+    this.ws?.close(1000, "client disconnect")
     this.stream?.getTracks().forEach((t) => t.stop())
     this.ws = null
     this.mediaRecorder = null
@@ -33,8 +38,7 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
 
   mute(): void {
     this.muted = true
-    // Send KeepAlive every 5s so Deepgram doesn't close the WebSocket
-    // while we're not sending audio during AI speech
+    // KeepAlive prevents Deepgram from closing the WebSocket while no audio flows
     this.keepAliveTimer = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: "KeepAlive" }))
@@ -45,10 +49,6 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
   unmute(): void {
     this.muted = false
     this.stopKeepAlive()
-    // If the WebSocket closed during AI speech, log it so we can diagnose
-    if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
-      console.warn("[deepgram] WebSocket closed during mute (state:", this.ws.readyState, ") — audio will be lost")
-    }
   }
 
   private stopKeepAlive(): void {
@@ -59,12 +59,19 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
   }
 
   startListening(): void {
+    this.isListening = true
+    this.openSocket()
+  }
+
+  private openSocket(): void {
     if (!this.apiKey || !this.stream) return
 
-    const mimeType =
-      MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
-      : MediaRecorder.isTypeSupported("audio/webm")           ? "audio/webm"
-      : ""
+    // Close any existing socket cleanly before reopening
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+      this.ws.onclose = null   // prevent reconnect loop
+      this.ws.close(1000, "reconnect")
+    }
+    this.mediaRecorder?.stop()
 
     const params = new URLSearchParams({
       model:           "nova-2",
@@ -82,20 +89,14 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
 
     this.ws.onopen = () => {
       if (!this.stream) return
-      const options: MediaRecorderOptions = mimeType ? { mimeType } : {}
+      const options: MediaRecorderOptions = this.mimeType ? { mimeType: this.mimeType } : {}
       this.mediaRecorder = new MediaRecorder(this.stream, options)
-
       this.mediaRecorder.ondataavailable = (e) => {
-        if (this.muted) return
-        if (e.data.size > 0) {
-          if (this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.send(e.data)
-          } else {
-            console.warn("[deepgram] Tried to send audio but WebSocket is not open (state:", this.ws?.readyState, ")")
-          }
+        if (this.muted || !e.data.size) return
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.send(e.data)
         }
       }
-
       this.mediaRecorder.start(250)
     }
 
@@ -111,22 +112,28 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
             this.partialCallback?.(alt.transcript)
           }
         }
-      } catch {
-        // ignore malformed messages
-      }
+      } catch { /* ignore malformed */ }
     }
 
     this.ws.onerror = (e) => {
       console.error("[deepgram] WebSocket error", e)
-      this.errorCallback?.(new Error("Deepgram WebSocket error"))
     }
 
     this.ws.onclose = (e) => {
-      console.warn("[deepgram] WebSocket closed — code:", e.code, "reason:", e.reason || "(none)", "muted at close:", this.muted)
+      console.warn("[deepgram] closed — code:", e.code, "muted:", this.muted)
+      if (this.isListening) {
+        // Deepgram closed the connection while we still need it — reconnect
+        console.warn("[deepgram] reconnecting in 500ms…")
+        setTimeout(() => {
+          if (this.isListening) this.openSocket()
+        }, 500)
+      }
     }
   }
 
   stopListening(): void {
+    this.isListening = false
+    this.stopKeepAlive()
     this.mediaRecorder?.stop()
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "CloseStream" }))
@@ -135,7 +142,7 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
 
   onPartialTranscript(cb: (text: string) => void) { this.partialCallback = cb }
   onFinalTranscript(cb: (text: string) => void)   { this.finalCallback = cb }
-  onSpeechStarted(cb: () => void)  { this.speechStartedCallback = cb }
-  onSpeechEnded(cb: () => void)    { this.speechEndedCallback = cb }
+  onSpeechStarted(cb: () => void)  { /* unused */ }
+  onSpeechEnded(cb: () => void)    { /* unused */ }
   onError(cb: (e: Error) => void)  { this.errorCallback = cb }
 }
