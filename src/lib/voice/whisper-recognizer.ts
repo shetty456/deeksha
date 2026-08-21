@@ -162,9 +162,9 @@ export class WhisperRecognizer implements SpeechRecognizer {
         body: blob,
       })
       if (!res.ok) {
+        // Log and continue — a failed segment doesn't break the interview
         const body = await res.json().catch(() => ({}))
-        console.error("[whisper] transcribe error:", res.status, body)
-        this.errorCallback?.(new Error((body as { error?: string }).error ?? `HTTP ${res.status}`))
+        console.warn("[whisper] transcribe failed:", res.status, body)
         return
       }
       const { text } = (await res.json()) as { text: string }
@@ -172,8 +172,8 @@ export class WhisperRecognizer implements SpeechRecognizer {
         this.finalCallback?.(text.trim())
       }
     } catch (err) {
-      console.error("[whisper] fetch error:", err)
-      this.errorCallback?.(err instanceof Error ? err : new Error(String(err)))
+      // Network error — whisper server may be starting up; just log and continue
+      console.warn("[whisper] fetch error (will retry on next speech):", err)
     }
   }
 

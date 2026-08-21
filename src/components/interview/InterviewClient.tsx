@@ -109,13 +109,14 @@ export default function InterviewClient({
       body: JSON.stringify({ interview_id: interviewId }),
     }).catch(() => {})
 
-    logEvent("evaluation_started")
-    await fetch("/api/evaluation", {
+    // Evaluation can take 10-15s — fire and forget so we navigate immediately.
+    // The results page polls until evaluation appears in the DB.
+    fetch("/api/evaluation", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ interview_id: interviewId }),
     }).catch(() => {})
-    logEvent("evaluation_completed")
+
     router.push(`/results/${interviewId}`)
   }, [ending, interviewId, router])
 

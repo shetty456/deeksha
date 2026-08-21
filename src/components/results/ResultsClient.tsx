@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -66,6 +66,13 @@ function ScoreBar({ score }: { score: number }) {
 export default function ResultsClient({ interview, evaluation, transcript }: Props) {
   const router = useRouter()
   const [showTranscript, setShowTranscript] = useState(false)
+
+  // Poll until evaluation arrives (it runs async after interview ends)
+  useEffect(() => {
+    if (evaluation) return
+    const id = setInterval(() => router.refresh(), 3000)
+    return () => clearInterval(id)
+  }, [evaluation, router])
 
   const categoryLabel = interview.category.replace(/_/g, " ")
 
