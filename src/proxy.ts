@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 // Paths that anyone can access without being signed in
-const PUBLIC_PATHS = ["/", "/login", "/auth/callback"]
+const PUBLIC_PATHS = ["/", "/login", "/auth/callback", "/privacy", "/terms"]
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
