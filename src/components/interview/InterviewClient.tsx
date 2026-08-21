@@ -10,7 +10,6 @@ import { InterviewEngine, type Question } from "@/lib/interview/engine"
 import { logEvent } from "@/lib/telemetry"
 import VoiceOrb from "./VoiceOrb"
 import InterviewTimer from "./InterviewTimer"
-import { cn } from "@/lib/utils"
 
 interface Props {
   interviewId: string
@@ -306,8 +305,8 @@ export default function InterviewClient({
       {/* Body */}
       <div className="flex-1 flex flex-col lg:flex-row">
 
-        {/* Left — orb panel */}
-        <div className="lg:w-[380px] flex flex-col items-center justify-center gap-6 px-8 py-12 lg:py-0 lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)]">
+        {/* Left — orb panel (takes the bulk of the space) */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 py-12 lg:py-0 lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)]">
 
           {/* State label */}
           <div className="text-center space-y-1.5 h-12 flex flex-col justify-end">
@@ -344,65 +343,29 @@ export default function InterviewClient({
           </button>
         </div>
 
-        {/* Divider */}
-        <div className="hidden lg:block w-px" style={{ background: "rgba(255,255,255,0.06)" }} />
-
-        {/* Right — transcript */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-6 py-8 space-y-5">
-
-            {turns.length === 0 && (
-              <div className="flex items-center justify-center h-48">
-                <p className="text-sm" style={{ color: "rgba(255,255,255,0.2)" }}>
-                  The conversation will appear here.
-                </p>
-              </div>
-            )}
-
+        {/* Right — transcript (15% of desktop width, plain text) */}
+        <div
+          className="hidden lg:flex flex-col overflow-hidden"
+          style={{ width: "15%", borderLeft: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <div className="flex-1 overflow-y-auto px-3 py-5 space-y-4">
             {turns.map((turn) => (
-              <div
-                key={turn.id}
-                className={cn("flex gap-3 turn-animate", turn.speaker === "candidate" ? "flex-row-reverse" : "flex-row")}
-              >
-                {/* Speaker chip */}
-                <div
-                  className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
-                  style={turn.speaker === "interviewer"
-                    ? { background: "var(--accent)", color: "#fff" }
-                    : { background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.12)" }
-                  }
-                >
+              <div key={turn.id} className="space-y-0.5">
+                <p className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.22)" }}>
                   {turn.speaker === "interviewer" ? "AI" : "Me"}
-                </div>
-
-                {/* Bubble */}
-                <div
-                  className="max-w-[78%] rounded-xl px-4 py-3 text-sm leading-relaxed"
-                  style={turn.speaker === "interviewer"
-                    ? { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.9)", border: "1px solid rgba(255,255,255,0.08)" }
-                    : { background: "rgba(10,132,255,0.15)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(10,132,255,0.2)" }
-                  }
-                >
+                </p>
+                <p className="text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.5)" }}>
                   {turn.text}
-                </div>
+                </p>
               </div>
             ))}
 
-            {/* Partial — faded right-aligned */}
             {partialTranscript && (
-              <div className="flex gap-3 flex-row-reverse opacity-50 turn-animate">
-                <div
-                  className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
-                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)" }}
-                >
-                  Me
-                </div>
-                <div
-                  className="max-w-[78%] rounded-xl px-4 py-3 text-sm leading-relaxed italic"
-                  style={{ background: "rgba(10,132,255,0.08)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(10,132,255,0.1)" }}
-                >
+              <div className="space-y-0.5 opacity-40">
+                <p className="text-[9px] uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.22)" }}>Me</p>
+                <p className="text-[11px] leading-relaxed italic" style={{ color: "rgba(255,255,255,0.5)" }}>
                   {partialTranscript}
-                </div>
+                </p>
               </div>
             )}
 
