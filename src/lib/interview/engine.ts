@@ -28,8 +28,6 @@ export class InterviewEngine {
   private config: InterviewConfig | null = null
   private history: ConversationTurn[] = []
   private turnSequence = 0
-  private followUpCount = 0
-  private maxFollowUps = 6   // overwritten by start() based on duration
 
   state: InterviewState = "idle"
 
@@ -38,9 +36,6 @@ export class InterviewEngine {
     this.state = "intro"
     this.history = []
     this.turnSequence = 0
-    this.followUpCount = 0
-    // ~90s per exchange (candidate speaks + AI responds); min 4, max 16
-    this.maxFollowUps = Math.min(16, Math.max(4, Math.round(config.durationSeconds / 90)))
   }
 
   get interviewId(): string {
@@ -65,11 +60,10 @@ export class InterviewEngine {
 
   addCandidateTurn(text: string): void {
     this.history.push({ speaker: "candidate", text })
-    this.followUpCount++
   }
 
   shouldContinue(): boolean {
-    return this.followUpCount < this.maxFollowUps && this.state !== "completed"
+    return this.state !== "completed"
   }
 
   getContext(): InterviewContext {

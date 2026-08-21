@@ -75,7 +75,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
   const [step, setStep] = useState<Step>("home")
   const [category, setCategory] = useState<InterviewCategory>("product_sense")
   const [difficulty, setDifficulty] = useState<Difficulty>("medium")
-  const [duration, setDuration] = useState<Duration>(1200)
+  const [duration, setDuration] = useState<Duration>(600)
   const [starting, setStarting] = useState(false)
 
   const displayName = user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "there"
@@ -313,9 +313,10 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
                       {d.label}
                     </p>
                     <p className="text-xs text-label-secondary mt-0.5">
-                      {d.seconds === 600  && "Quick warm-up, 1–2 questions"}
-                      {d.seconds === 1200 && "Standard session, 3–4 questions"}
-                      {d.seconds === 1800 && "Full interview, 5+ questions"}
+                      {d.seconds === 300  && "Quick sprint, tight back-and-forth"}
+                      {d.seconds === 600  && "Focused session, good depth"}
+                      {d.seconds === 1200 && "Standard interview length"}
+                      {d.seconds === 1800 && "Full deep-dive, senior-level pace"}
                     </p>
                   </div>
                   {duration === d.seconds && <span className="text-accent text-base ml-4">✓</span>}

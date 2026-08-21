@@ -9,7 +9,7 @@ export type InterviewCategory =
 
 export type Difficulty = "easy" | "medium" | "hard"
 
-export type Duration = 600 | 1200 | 1800 // seconds
+export type Duration = 300 | 600 | 1200 | 1800 // seconds
 
 export interface CategoryMeta {
   id: InterviewCategory
@@ -67,7 +67,8 @@ export const DIFFICULTIES: { value: Difficulty; label: string }[] = [
 ]
 
 export const DURATIONS: DurationOption[] = [
-  { seconds: 600, label: "10 min" },
+  { seconds: 300,  label: "5 min" },
+  { seconds: 600,  label: "10 min" },
   { seconds: 1200, label: "20 min" },
   { seconds: 1800, label: "30 min" },
 ]
