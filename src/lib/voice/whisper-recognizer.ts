@@ -1,3 +1,4 @@
+import { devLog } from "@/lib/dev-log"
 import type { SpeechRecognizer } from "./types"
 
 const SILENCE_THRESHOLD = 0.015  // RMS below this = silence
@@ -114,6 +115,7 @@ export class WhisperRecognizer implements SpeechRecognizer {
       // Speech onset
       this.isSpeaking = true
       this.clearSilenceTimer()
+      devLog.push("stt", "speech start")
       this.speechStartedCallback?.()
       this.startRecording()
     } else if (!loud && this.isSpeaking && !this.silenceTimer) {
@@ -155,6 +157,9 @@ export class WhisperRecognizer implements SpeechRecognizer {
     const blob = new Blob(this.chunks, { type: this.mimeType || "audio/webm" })
     this.chunks = []
 
+    const t0 = Date.now()
+    devLog.push("req", "→ whisper/transcribe", `${(blob.size / 1024).toFixed(0)} KB`)
+
     try {
       const res = await fetch("/api/whisper/transcribe", {
         method: "POST",
@@ -162,17 +167,18 @@ export class WhisperRecognizer implements SpeechRecognizer {
         body: blob,
       })
       if (!res.ok) {
-        // Log and continue — a failed segment doesn't break the interview
         const body = await res.json().catch(() => ({}))
+        devLog.push("error", "← whisper/transcribe", `${res.status}`, Date.now() - t0)
         console.warn("[whisper] transcribe failed:", res.status, body)
         return
       }
       const { text } = (await res.json()) as { text: string }
+      devLog.push("res", "← whisper/transcribe", text?.trim() ? `"${text.trim().slice(0, 60)}"` : "(empty)", Date.now() - t0)
       if (text?.trim()) {
         this.finalCallback?.(text.trim())
       }
     } catch (err) {
-      // Network error — whisper server may be starting up; just log and continue
+      devLog.push("error", "← whisper/transcribe", String(err), Date.now() - t0)
       console.warn("[whisper] fetch error (will retry on next speech):", err)
     }
   }

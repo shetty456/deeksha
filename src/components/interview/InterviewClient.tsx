@@ -8,8 +8,10 @@ import { WhisperRecognizer } from "@/lib/voice/whisper-recognizer"
 import { DeepgramSpeechSynthesizer } from "@/lib/voice/deepgram-synthesizer"
 import { InterviewEngine, type Question } from "@/lib/interview/engine"
 import { logEvent } from "@/lib/telemetry"
+import { devLog } from "@/lib/dev-log"
 import VoiceOrb from "./VoiceOrb"
 import InterviewTimer from "./InterviewTimer"
+import DevLogPanel from "./DevLogPanel"
 
 interface Props {
   interviewId: string
@@ -127,15 +129,19 @@ export default function InterviewClient({
     setAudioState("thinking")
     logEvent("llm_started")
 
+    const llmStart = Date.now()
     const ctx = engine.getContext()
+    devLog.push("req", "→ interview/respond", `turn ${ctx.history.length}`)
     const res = await fetch("/api/interview/respond", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(ctx),
     })
+    devLog.push("res", "← interview/respond", String(res.status), Date.now() - llmStart)
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
+      devLog.push("error", "LLM error", String(res.status))
       console.error("[interview] respond:", res.status, err)
       setAudioState("error")
       return null
@@ -152,7 +158,11 @@ export default function InterviewClient({
         const { done, value } = await reader.read()
         if (done) break
         const text = decoder.decode(value, { stream: true })
-        if (firstToken) { logEvent("llm_first_token"); firstToken = false }
+        if (firstToken) {
+          logEvent("llm_first_token")
+          devLog.push("info", "LLM 1st token", undefined, Date.now() - llmStart)
+          firstToken = false
+        }
         full += text
         yield text
       }
@@ -161,7 +171,10 @@ export default function InterviewClient({
     recog.mute()
     setAudioState("speaking")
     logEvent("tts_started")
+    const ttsStart = Date.now()
+    devLog.push("tts", "→ TTS speak")
     await synth.speak(stream())
+    devLog.push("tts", "← TTS done", undefined, Date.now() - ttsStart)
     recog.unmute()
 
     if (!isMountedRef.current) return null
@@ -205,6 +218,8 @@ export default function InterviewClient({
     hasInitialized.current = true
 
     async function init() {
+      devLog.reset()
+      devLog.push("info", "interview_started", category)
       setAudioState("connecting")
       logEvent("interview_started")
 
@@ -223,7 +238,9 @@ export default function InterviewClient({
       try {
         await recognizer.connect()
         logEvent("microphone_connected")
+        devLog.push("info", "mic connected")
         await synthesizer.connect()
+        devLog.push("info", "synthesizer connected")
 
         const pollAmp = () => {
           setAmplitude(synthesizer.getAmplitude())
@@ -249,12 +266,20 @@ export default function InterviewClient({
           const clean = text.trim()
           if (!clean) return
           // Ignore single words / filler ("So", "Um", "Okay") — not a real turn
-          if (clean.split(/\s+/).length < 4) return
+          if (clean.split(/\s+/).length < 4) {
+            devLog.push("stt", "transcript filtered", `"${clean}" (too short)`)
+            return
+          }
+          devLog.push("stt", "transcript", `"${clean.slice(0, 60)}${clean.length > 60 ? "…" : ""}"`)
           handleCandidateTurn(clean)
         })
 
         recognizer.onSpeechEnded(() => setPartialTranscript(""))
-        recognizer.onError((err) => { console.error("STT:", err); setAudioState("error") })
+        recognizer.onError((err) => {
+          devLog.push("error", "STT error", err.message)
+          console.error("STT:", err)
+          setAudioState("error")
+        })
 
         recognizer.startListening()
         logEvent("stt_connected")
@@ -343,10 +368,10 @@ export default function InterviewClient({
           </button>
         </div>
 
-        {/* Right — transcript (15% of desktop width, plain text log) */}
+        {/* Right — transcript (20% of desktop width, plain text log) */}
         <div
           className="hidden lg:flex flex-col flex-shrink-0 overflow-hidden"
-          style={{ width: "15%", borderLeft: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.02)" }}
+          style={{ width: "20%", borderLeft: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.02)" }}
         >
           {/* Header */}
           <div className="px-3 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
@@ -386,6 +411,8 @@ export default function InterviewClient({
           </div>
         </div>
       </div>
+
+      <DevLogPanel />
     </div>
   )
 }
