@@ -149,13 +149,18 @@ export default function HomeClient({ user, recentInterviews }: Props) {
         </div>
 
         {/* Start */}
-        <button
-          onClick={handleStart}
-          disabled={starting}
-          className="w-full rounded-2xl bg-accent px-6 py-4 text-base font-semibold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {starting ? "Starting…" : "Start Interview"}
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={handleStart}
+            disabled={starting}
+            className="w-full rounded-2xl bg-accent px-6 py-4 text-base font-semibold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {starting ? "Starting…" : "Start Interview"}
+          </button>
+          <p className="text-xs text-center text-text-tertiary">
+            Microphone access required — your browser will ask when the session starts.
+          </p>
+        </div>
 
         {/* Recent interviews */}
         {recentInterviews.length > 0 && (
@@ -173,7 +178,8 @@ export default function HomeClient({ user, recentInterviews }: Props) {
                       : null
                   }
                   disabled={interview.status !== "completed"}
-                  className="w-full flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-left hover:border-text-secondary transition-colors disabled:cursor-default"
+                  title={interview.status !== "completed" ? "Feedback not ready yet" : undefined}
+                  className="w-full flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-left hover:border-text-secondary transition-colors disabled:cursor-default disabled:opacity-60"
                 >
                   <div>
                     <p className="text-sm font-medium text-text-primary capitalize">
@@ -186,10 +192,10 @@ export default function HomeClient({ user, recentInterviews }: Props) {
                   <div className="text-right">
                     {interview.overall_score != null ? (
                       <p className="text-sm font-semibold text-text-primary">
-                        {interview.overall_score.toFixed(1)}
+                        {interview.overall_score.toFixed(1)}<span className="text-xs font-normal text-text-secondary">/10</span>
                       </p>
                     ) : (
-                      <p className="text-xs text-text-secondary capitalize">{interview.status}</p>
+                      <p className="text-xs text-text-secondary">{interview.status.replace(/_/g, " ")}</p>
                     )}
                   </div>
                 </button>

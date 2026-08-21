@@ -4,12 +4,12 @@ const FEATURES = [
   {
     icon: "🎙️",
     title: "Real-time voice conversation",
-    body: "Speak naturally. The AI interviewer listens, responds, and follows up — just like a real PM interview.",
+    body: "No typing. Speak and the AI responds in under a second — the same pressure as a live interview room.",
   },
   {
     icon: "⚡",
     title: "Sub-second response latency",
-    body: "No waiting. The interviewer begins responding the moment you finish speaking.",
+    body: "No awkward pauses. The interviewer begins the moment you finish — so you stay in the flow of the conversation.",
   },
   {
     icon: "🔁",
@@ -63,7 +63,7 @@ export default function HomePage() {
       <section className="max-w-5xl mx-auto px-6 pt-20 pb-24 text-center">
         <div className="inline-flex items-center gap-2 bg-bg-card border border-separator rounded-full px-4 py-1.5 text-xs font-medium text-label-secondary mb-8">
           <span className="w-1.5 h-1.5 rounded-full bg-accent inline-block" />
-          Voice-first · Real-time · AI-powered
+          Voice-first AI interview practice for PMs
         </div>
 
         <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-label-primary leading-tight mb-6">
@@ -74,10 +74,10 @@ export default function HomePage() {
 
         <p className="text-lg sm:text-xl text-label-secondary max-w-xl mx-auto leading-relaxed mb-10">
           A real-time AI interviewer that listens, follows up, and challenges
-          your thinking — so you are ready when it counts.
+          your thinking — built for FAANG, Series A, and everything in between.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
             href="/login"
             className="w-full sm:w-auto inline-flex items-center justify-center bg-accent text-accent-foreground font-semibold text-base px-8 py-4 rounded-md hover:opacity-90 transition-opacity"
@@ -86,9 +86,9 @@ export default function HomePage() {
           </Link>
           <a
             href="#how-it-works"
-            className="w-full sm:w-auto inline-flex items-center justify-center bg-bg-card text-label-primary font-semibold text-base px-8 py-4 rounded-md border border-separator hover:border-label-tertiary transition-colors"
+            className="text-sm font-medium text-label-secondary hover:text-label-primary transition-colors"
           >
-            See how it works
+            See how it works ↓
           </a>
         </div>
       </section>
@@ -130,7 +130,7 @@ export default function HomePage() {
             Features
           </p>
           <h2 className="text-3xl font-bold tracking-tight text-label-primary">
-            Built to make you better.
+            Everything the real interview tests.
           </h2>
         </div>
 
@@ -152,7 +152,7 @@ export default function HomePage() {
       <section className="max-w-5xl mx-auto px-6 pb-24">
         <div className="bg-bg-card rounded-2xl p-8 sm:p-10 text-center space-y-6">
           <h2 className="text-2xl font-bold tracking-tight text-label-primary">
-            7 interview types. 600+ questions.
+            7 interview types. Every question type that matters.
           </h2>
           <div className="flex flex-wrap justify-center gap-2">
             {CATEGORIES.map((c) => (
@@ -171,10 +171,10 @@ export default function HomePage() {
       <section className="max-w-5xl mx-auto px-6 pb-24">
         <div className="bg-accent rounded-2xl p-10 sm:p-14 text-center space-y-6">
           <h2 className="text-3xl font-bold text-white tracking-tight">
-            Ready to get better?
+            Your next PM interview is real practice away.
           </h2>
           <p className="text-white/80 text-base">
-            Your next PM interview is closer than you think.
+            No account setup. No scheduling. Start a session in under 30 seconds.
           </p>
           <Link
             href="/login"
