@@ -6,6 +6,7 @@ export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
   private currentSource: AudioBufferSourceNode | null = null
   private abortController: AbortController | null = null
   private amplitude = 0
+  private rafId = 0
 
   private speechStartCallback: (() => void) | null = null
   private speechEndCallback: (() => void) | null = null
@@ -15,26 +16,28 @@ export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
     this.analyser = this.audioContext.createAnalyser()
     this.analyser.fftSize = 256
     this.analyser.connect(this.audioContext.destination)
-    this.updateAmplitude()
+    this.startAmplitudePoll()
   }
 
-  private updateAmplitude() {
-    if (!this.analyser) return
-    const data = new Uint8Array(this.analyser.frequencyBinCount)
+  private startAmplitudePoll() {
+    const analyser = this.analyser
+    if (!analyser) return
+    const data = new Uint8Array(analyser.frequencyBinCount)
     const tick = () => {
-      this.analyser!.getByteFrequencyData(data)
-      const avg = data.reduce((a, b) => a + b, 0) / data.length
-      this.amplitude = avg / 255
-      requestAnimationFrame(tick)
+      if (!this.analyser) return // stopped — don't reschedule
+      this.analyser.getByteFrequencyData(data)
+      this.amplitude = data.reduce((a, b) => a + b, 0) / data.length / 255
+      this.rafId = requestAnimationFrame(tick)
     }
-    requestAnimationFrame(tick)
+    this.rafId = requestAnimationFrame(tick)
   }
 
   disconnect(): void {
+    cancelAnimationFrame(this.rafId)
     this.interrupt()
+    this.analyser = null
     this.audioContext?.close()
     this.audioContext = null
-    this.analyser = null
   }
 
   interrupt(): void {
@@ -50,11 +53,8 @@ export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
     this.abortController = new AbortController()
     const signal = this.abortController.signal
 
-    let fullText = ""
-    const chunks: string[] = []
+    this.speechStartCallback?.()
 
-    // Collect text chunks and send sentences to TTS as they form
-    const sentenceBuffer: string[] = []
     let pendingSentence = ""
 
     const flushSentence = async (sentence: string) => {
@@ -62,33 +62,24 @@ export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
       try {
         await this.synthesizeAndPlay(sentence, signal)
       } catch {
-        // interrupted or aborted
+        // interrupted or aborted — swallow
       }
     }
-
-    this.speechStartCallback?.()
 
     try {
       for await (const chunk of textStream) {
         if (signal.aborted) break
-        fullText += chunk
-        chunks.push(chunk)
         pendingSentence += chunk
 
-        // Flush on sentence boundaries for low latency
-        const sentenceEnd = /[.!?]\s+|[.!?]$/
-        const match = pendingSentence.match(sentenceEnd)
-        if (match && match.index !== undefined) {
+        // Flush on sentence boundary for low first-audio latency
+        const match = pendingSentence.match(/[.!?]\s+|[.!?]$/)
+        if (match?.index !== undefined) {
           const idx = match.index + match[0].length
           const sentence = pendingSentence.slice(0, idx)
           pendingSentence = pendingSentence.slice(idx)
-          sentenceBuffer.push(sentence)
-          // Non-blocking: fire and continue consuming stream
-          flushSentence(sentence)
+          await flushSentence(sentence)
         }
       }
-
-      // Flush remainder
       if (pendingSentence.trim() && !signal.aborted) {
         await flushSentence(pendingSentence)
       }
@@ -110,10 +101,10 @@ export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
     if (!res.ok || !res.body || signal.aborted) return
 
     const arrayBuffer = await res.arrayBuffer()
-    if (signal.aborted) return
+    if (signal.aborted || !this.audioContext) return
 
     const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
-    if (signal.aborted) return
+    if (signal.aborted || !this.audioContext) return
 
     const source = this.audioContext.createBufferSource()
     source.buffer = audioBuffer
@@ -126,15 +117,7 @@ export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
     })
   }
 
-  onSpeechStart(callback: () => void) {
-    this.speechStartCallback = callback
-  }
-
-  onSpeechEnd(callback: () => void) {
-    this.speechEndCallback = callback
-  }
-
-  getAmplitude(): number {
-    return this.amplitude
-  }
+  onSpeechStart(cb: () => void) { this.speechStartCallback = cb }
+  onSpeechEnd(cb: () => void) { this.speechEndCallback = cb }
+  getAmplitude(): number { return this.amplitude }
 }

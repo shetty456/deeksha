@@ -5,6 +5,7 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
   private mediaRecorder: MediaRecorder | null = null
   private stream: MediaStream | null = null
   private apiKey: string | null = null
+  private muted = false
 
   private partialCallback: ((text: string) => void) | null = null
   private finalCallback: ((text: string) => void) | null = null
@@ -16,7 +17,6 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
     const res = await fetch("/api/deepgram/token")
     const { key } = await res.json()
     this.apiKey = key
-
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true })
   }
 
@@ -29,6 +29,10 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
     this.stream = null
   }
 
+  /** Pause sending audio to Deepgram while AI is speaking (prevents echo) */
+  mute(): void { this.muted = true }
+  unmute(): void { this.muted = false }
+
   startListening(): void {
     if (!this.apiKey || !this.stream) return
 
@@ -37,7 +41,7 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
       language: "en-US",
       smart_format: "true",
       interim_results: "true",
-      endpointing: "300",
+      endpointing: "400",
       vad_events: "true",
       encoding: "linear16",
       sample_rate: "16000",
@@ -45,7 +49,7 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
     })
 
     this.ws = new WebSocket(
-      `wss://api.deepgram.com/v1/listen?${params.toString()}`,
+      `wss://api.deepgram.com/v1/listen?${params}`,
       ["token", this.apiKey]
     )
 
@@ -54,14 +58,13 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
       this.mediaRecorder = new MediaRecorder(this.stream, {
         mimeType: "audio/webm;codecs=opus",
       })
-
       this.mediaRecorder.ondataavailable = (e) => {
+        if (this.muted) return
         if (e.data.size > 0 && this.ws?.readyState === WebSocket.OPEN) {
           this.ws.send(e.data)
         }
       }
-
-      this.mediaRecorder.start(100) // 100ms chunks
+      this.mediaRecorder.start(100)
     }
 
     this.ws.onmessage = (event) => {
@@ -72,16 +75,13 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
           this.speechStartedCallback?.()
           return
         }
-
         if (data.type === "UtteranceEnd") {
           this.speechEndedCallback?.()
           return
         }
-
         if (data.type === "Results") {
           const alt = data.channel?.alternatives?.[0]
           if (!alt?.transcript) return
-
           if (data.is_final && data.speech_final) {
             this.finalCallback?.(alt.transcript)
           } else if (!data.is_final) {
@@ -105,23 +105,9 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
     }
   }
 
-  onPartialTranscript(callback: (text: string) => void) {
-    this.partialCallback = callback
-  }
-
-  onFinalTranscript(callback: (text: string) => void) {
-    this.finalCallback = callback
-  }
-
-  onSpeechStarted(callback: () => void) {
-    this.speechStartedCallback = callback
-  }
-
-  onSpeechEnded(callback: () => void) {
-    this.speechEndedCallback = callback
-  }
-
-  onError(callback: (e: Error) => void) {
-    this.errorCallback = callback
-  }
+  onPartialTranscript(cb: (text: string) => void) { this.partialCallback = cb }
+  onFinalTranscript(cb: (text: string) => void) { this.finalCallback = cb }
+  onSpeechStarted(cb: () => void) { this.speechStartedCallback = cb }
+  onSpeechEnded(cb: () => void) { this.speechEndedCallback = cb }
+  onError(cb: (e: Error) => void) { this.errorCallback = cb }
 }

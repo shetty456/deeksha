@@ -93,7 +93,7 @@ export default function ResultsClient({ interview, evaluation, transcript }: Pro
             {categoryLabel}
           </h1>
           <p className="text-sm text-text-secondary capitalize">
-            {interview.difficulty} · {new Date(interview.created_at).toLocaleDateString()}
+            {interview.difficulty} · {new Date(interview.created_at).toLocaleDateString("en-GB")}
           </p>
         </div>
 

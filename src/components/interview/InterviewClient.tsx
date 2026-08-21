@@ -9,6 +9,7 @@ import { InterviewEngine, type Question } from "@/lib/interview/engine"
 import { logEvent } from "@/lib/telemetry"
 import VoiceOrb from "./VoiceOrb"
 import InterviewTimer from "./InterviewTimer"
+import { cn } from "@/lib/utils"
 
 interface Props {
   interviewId: string
@@ -18,164 +19,174 @@ interface Props {
   durationSeconds: number
 }
 
-const STATE_LABELS: Record<AudioState, string> = {
-  idle: "Getting ready…",
-  connecting: "Connecting…",
-  listening: "Listening",
-  thinking: "Thinking…",
-  speaking: "Speaking",
-  interrupted: "Listening",
-  reconnecting: "Reconnecting…",
-  ended: "Interview ended",
-  error: "Connection error",
+interface TranscriptTurn {
+  speaker: "interviewer" | "candidate"
+  text: string
+  id: number
 }
 
+const STATE_LABELS: Record<AudioState, string> = {
+  idle:         "Getting ready…",
+  connecting:   "Connecting…",
+  listening:    "Listening",
+  thinking:     "Thinking…",
+  speaking:     "Speaking",
+  interrupted:  "Listening",
+  reconnecting: "Reconnecting…",
+  ended:        "Interview ended",
+  error:        "Something went wrong",
+}
+
+let turnId = 0
+
 export default function InterviewClient({
-  interviewId,
-  question,
-  category,
-  difficulty,
-  durationSeconds,
+  interviewId, question, category, difficulty, durationSeconds,
 }: Props) {
   const router = useRouter()
-  const [audioState, setAudioState] = useState<AudioState>("idle")
-  const [amplitude, setAmplitude] = useState(0)
-  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [audioState, setAudioState]         = useState<AudioState>("idle")
+  const [amplitude, setAmplitude]           = useState(0)
+  const [startedAt, setStartedAt]           = useState<number | null>(null)
   const [partialTranscript, setPartialTranscript] = useState("")
-  const [turnCount, setTurnCount] = useState(0)
-  const [ending, setEnding] = useState(false)
+  const [turns, setTurns]                   = useState<TranscriptTurn[]>([])
+  const [ending, setEnding]                 = useState(false)
 
-  const recognizerRef = useRef<DeepgramSpeechRecognizer | null>(null)
+  const recognizerRef  = useRef<DeepgramSpeechRecognizer | null>(null)
   const synthesizerRef = useRef<DeepgramSpeechSynthesizer | null>(null)
-  const engineRef = useRef<InterviewEngine | null>(null)
-  const amplitudeRafRef = useRef<number>(0)
-  const sequenceRef = useRef(0)
-  const isMountedRef = useRef(true)
+  const engineRef      = useRef<InterviewEngine | null>(null)
+  const rafRef         = useRef(0)
+  const sequenceRef    = useRef(0)
+  const isMountedRef   = useRef(true)
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null)
 
-  const persistTurn = useCallback(
-    async (speaker: "interviewer" | "candidate", text: string) => {
-      sequenceRef.current++
-      await fetch("/api/interview/turns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          interview_id: interviewId,
-          speaker,
-          text,
-          sequence: sequenceRef.current,
-          started_at: new Date().toISOString(),
-        }),
-      }).catch(() => {}) // best-effort
-    },
-    [interviewId]
-  )
+  // Auto-scroll transcript
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [turns, partialTranscript])
+
+  const addTurn = useCallback((speaker: TranscriptTurn["speaker"], text: string) => {
+    setTurns((prev) => [...prev, { speaker, text, id: turnId++ }])
+  }, [])
+
+  const persistTurn = useCallback(async (speaker: "interviewer" | "candidate", text: string) => {
+    sequenceRef.current++
+    await fetch("/api/interview/turns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        interview_id: interviewId,
+        speaker,
+        text,
+        sequence: sequenceRef.current,
+        started_at: new Date().toISOString(),
+      }),
+    }).catch(() => {})
+  }, [interviewId])
 
   const endInterview = useCallback(async () => {
     if (ending) return
     setEnding(true)
     setAudioState("ended")
 
+    recognizerRef.current?.stopListening()
     recognizerRef.current?.disconnect()
     synthesizerRef.current?.interrupt()
     synthesizerRef.current?.disconnect()
     engineRef.current?.end()
-    cancelAnimationFrame(amplitudeRafRef.current)
+    cancelAnimationFrame(rafRef.current)
 
     logEvent("interview_completed")
 
-    // Mark interview complete
     await fetch("/api/interview/complete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ interview_id: interviewId }),
     }).catch(() => {})
 
-    // Trigger evaluation
     logEvent("evaluation_started")
     await fetch("/api/evaluation", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ interview_id: interviewId }),
     }).catch(() => {})
-
     logEvent("evaluation_completed")
+
     router.push(`/results/${interviewId}`)
   }, [ending, interviewId, router])
 
-  const handleCandidateTurn = useCallback(
-    async (transcript: string) => {
-      if (!isMountedRef.current || ending) return
-      const engine = engineRef.current
-      if (!engine) return
+  /** Get AI response for a given context, stream it through TTS, return full text */
+  const getAIResponse = useCallback(async (engine: InterviewEngine, synth: DeepgramSpeechSynthesizer, recog: DeepgramSpeechRecognizer): Promise<string | null> => {
+    setAudioState("thinking")
+    logEvent("llm_started")
 
-      engine.addCandidateTurn(transcript)
-      setTurnCount((n) => n + 1)
-      setPartialTranscript("")
-      setAudioState("thinking")
+    const ctx = engine.getContext()
+    const res = await fetch("/api/interview/respond", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ctx),
+    })
 
-      await persistTurn("candidate", transcript)
-      logEvent("user_turn_ended")
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      console.error("[interview] respond error:", res.status, err)
+      setAudioState("error")
+      return null
+    }
+    if (!res.body || !isMountedRef.current) return null
 
-      if (!engine.shouldContinue()) {
-        await endInterview()
-        return
+    const reader  = res.body.getReader()
+    const decoder = new TextDecoder()
+    let firstToken = true
+    let fullResponse = ""
+
+    async function* tokenStream(): AsyncIterable<string> {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const text = decoder.decode(value, { stream: true })
+        if (firstToken) { logEvent("llm_first_token"); firstToken = false }
+        fullResponse += text
+        yield text
       }
+    }
 
-      // Get AI response via streaming LLM
-      logEvent("llm_started")
-      const ctx = engine.getContext()
+    // Mute mic while AI speaks to prevent echo
+    recog.mute()
+    setAudioState("speaking")
+    logEvent("tts_started")
 
-      const res = await fetch("/api/interview/respond", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ctx),
-      })
+    await synth.speak(tokenStream())
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        console.error("[interview] respond error:", res.status, err)
-        setAudioState("error")
-        return
-      }
-      if (!res.body || !isMountedRef.current) return
+    recog.unmute()
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let firstToken = true
-      let fullResponse = ""
+    if (!isMountedRef.current) return null
+    return fullResponse
+  }, [])
 
-      async function* tokenStream(): AsyncIterable<string> {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const text = decoder.decode(value, { stream: true })
-          if (firstToken) {
-            logEvent("llm_first_token")
-            firstToken = false
-          }
-          fullResponse += text
-          yield text
-        }
-      }
+  const handleCandidateTurn = useCallback(async (transcript: string) => {
+    if (!isMountedRef.current || ending) return
+    const engine = engineRef.current
+    const synth  = synthesizerRef.current
+    const recog  = recognizerRef.current
+    if (!engine || !synth || !recog) return
 
-      setAudioState("speaking")
-      logEvent("tts_started")
+    engine.addCandidateTurn(transcript)
+    addTurn("candidate", transcript)
+    setPartialTranscript("")
+    await persistTurn("candidate", transcript)
+    logEvent("user_turn_ended")
 
-      const synth = synthesizerRef.current
-      if (!synth) return
+    if (!engine.shouldContinue()) { await endInterview(); return }
 
-      await synth.speak(tokenStream())
+    const response = await getAIResponse(engine, synth, recog)
+    if (!response || !isMountedRef.current) return
 
-      if (!isMountedRef.current || ending) return
+    engine.addInterviewerTurn(response)
+    addTurn("interviewer", response)
+    await persistTurn("interviewer", response)
+    setAudioState("listening")
+  }, [ending, endInterview, persistTurn, addTurn, getAIResponse])
 
-      engine.addInterviewerTurn(fullResponse)
-      await persistTurn("interviewer", fullResponse)
-      setAudioState("listening")
-    },
-    [ending, endInterview, persistTurn]
-  )
-
-  // Initialize interview on mount
+  // Initialise on mount
   useEffect(() => {
     isMountedRef.current = true
 
@@ -183,115 +194,60 @@ export default function InterviewClient({
       setAudioState("connecting")
       logEvent("interview_started")
 
-      const recognizer = new DeepgramSpeechRecognizer()
+      const recognizer  = new DeepgramSpeechRecognizer()
       const synthesizer = new DeepgramSpeechSynthesizer()
-      const engine = new InterviewEngine()
+      const engine      = new InterviewEngine()
 
-      recognizerRef.current = recognizer
+      recognizerRef.current  = recognizer
       synthesizerRef.current = synthesizer
-      engineRef.current = engine
+      engineRef.current      = engine
 
-      engine.start({
-        interviewId,
-        question,
-        category,
-        difficulty,
-        durationSeconds,
-      })
+      engine.start({ interviewId, question, category, difficulty, durationSeconds })
 
       try {
         await recognizer.connect()
         logEvent("microphone_connected")
         await synthesizer.connect()
 
-        // Amplitude polling for orb animation
-        const pollAmplitude = () => {
+        // Amplitude poll for orb
+        const pollAmp = () => {
           setAmplitude(synthesizer.getAmplitude())
-          amplitudeRafRef.current = requestAnimationFrame(pollAmplitude)
+          rafRef.current = requestAnimationFrame(pollAmp)
         }
-        amplitudeRafRef.current = requestAnimationFrame(pollAmplitude)
+        rafRef.current = requestAnimationFrame(pollAmp)
 
-        // Wire up speech recognition
-        recognizer.onPartialTranscript((text) => {
-          setPartialTranscript(text)
-        })
-
+        // Wire STT callbacks
+        recognizer.onPartialTranscript((text) => setPartialTranscript(text))
         recognizer.onFinalTranscript((text) => {
           if (!text.trim()) return
-          logEvent("user_turn_ended")
           handleCandidateTurn(text)
         })
-
         recognizer.onSpeechStarted(() => {
           logEvent("user_turn_started")
-          // Barge-in: if AI is speaking, interrupt it
-          if (audioState === "speaking" || (synthesizerRef.current?.getAmplitude() ?? 0) > 0) {
-            synthesizerRef.current?.interrupt()
+          // Barge-in: interrupt AI if speaking
+          if (synthesizerRef.current && audioState === "speaking") {
+            synthesizerRef.current.interrupt()
+            recognizer.unmute()
             logEvent("ai_interrupted")
             setAudioState("interrupted")
           }
         })
-
-        recognizer.onSpeechEnded(() => {
-          setPartialTranscript("")
-        })
-
-        recognizer.onError((err) => {
-          console.error("STT error:", err)
-          setAudioState("error")
-        })
+        recognizer.onSpeechEnded(() => setPartialTranscript(""))
+        recognizer.onError((err) => { console.error("STT:", err); setAudioState("error") })
 
         recognizer.startListening()
         logEvent("stt_connected")
-
         setStartedAt(Date.now())
 
-        // Start the interview: AI asks the first question
-        setAudioState("thinking")
-        const ctx = engine.getContext()
+        // AI opens the interview
+        const response = await getAIResponse(engine, synthesizer, recognizer)
+        if (!response || !isMountedRef.current) return
 
-        const res = await fetch("/api/interview/respond", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(ctx),
-        })
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          console.error("[interview] respond error:", res.status, err)
-          setAudioState("error")
-          return
-        }
-        if (!res.body || !isMountedRef.current) return
-
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let firstToken = true
-        let fullResponse = ""
-
-        async function* tokenStream(): AsyncIterable<string> {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            const text = decoder.decode(value, { stream: true })
-            if (firstToken) {
-              logEvent("llm_first_token")
-              firstToken = false
-            }
-            fullResponse += text
-            yield text
-          }
-        }
-
-        setAudioState("speaking")
-        logEvent("tts_started")
-        await synthesizer.speak(tokenStream())
-
-        if (!isMountedRef.current) return
-
-        engine.addInterviewerTurn(fullResponse)
-        await persistTurn("interviewer", fullResponse)
+        engine.addInterviewerTurn(response)
+        addTurn("interviewer", response)
+        await persistTurn("interviewer", response)
         setAudioState("listening")
+
       } catch (err) {
         console.error("Interview init error:", err)
         setAudioState("error")
@@ -305,74 +261,111 @@ export default function InterviewClient({
       recognizerRef.current?.disconnect()
       synthesizerRef.current?.interrupt()
       synthesizerRef.current?.disconnect()
-      cancelAnimationFrame(amplitudeRafRef.current)
+      cancelAnimationFrame(rafRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Barge-in: wire speech-started to interrupt synthesizer
-  useEffect(() => {
-    const recognizer = recognizerRef.current
-    const synthesizer = synthesizerRef.current
-    if (!recognizer || !synthesizer) return
-
-    recognizer.onSpeechStarted(() => {
-      logEvent("user_turn_started")
-      if (audioState === "speaking") {
-        synthesizer.interrupt()
-        logEvent("ai_interrupted")
-        setAudioState("interrupted")
-      }
-    })
-  }, [audioState])
-
   const categoryLabel = category.replace(/_/g, " ")
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col items-center justify-between px-6 py-10">
-      {/* Top: branding + category */}
-      <div className="w-full flex items-center justify-between max-w-sm">
-        <span className="text-sm font-semibold text-text-primary">Deeksha</span>
-        <span className="text-xs text-text-secondary capitalize">{categoryLabel}</span>
-      </div>
+    <div className="min-h-dvh bg-bg-primary flex flex-col">
+      {/* Nav */}
+      <nav className="sticky top-0 z-50 bg-bg-primary/80 backdrop-blur-xl border-b border-separator">
+        <div className="max-w-4xl mx-auto px-6 h-14 flex items-center justify-between">
+          <span className="text-sm font-semibold text-label-primary">Deeksha</span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-label-secondary capitalize">{categoryLabel}</span>
+            <InterviewTimer
+              startedAt={startedAt}
+              durationSeconds={durationSeconds}
+              onExpired={endInterview}
+            />
+          </div>
+        </div>
+      </nav>
 
-      {/* Center: state label + orb */}
-      <div className="flex flex-col items-center gap-8">
-        <p className="text-sm font-medium text-text-secondary tracking-wide">
-          {STATE_LABELS[audioState]}
-        </p>
+      {/* Body — orb left, transcript right */}
+      <div className="flex-1 max-w-4xl mx-auto w-full px-6 py-8 flex flex-col lg:flex-row gap-6">
 
-        <VoiceOrb state={audioState} amplitude={amplitude} />
-
-        {/* Partial transcript hint */}
-        {partialTranscript && (
-          <p className="text-xs text-text-tertiary max-w-xs text-center line-clamp-2 italic">
-            {partialTranscript}
+        {/* Left: orb + state */}
+        <div className="lg:w-64 flex flex-col items-center justify-center gap-6 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-8rem)]">
+          <p className="text-sm font-medium text-label-secondary tracking-wide">
+            {STATE_LABELS[audioState]}
           </p>
-        )}
-      </div>
 
-      {/* Bottom: turn count + timer + end button */}
-      <div className="w-full max-w-sm flex items-center justify-between">
-        <div className="text-xs text-text-secondary">
-          <span>Turn {turnCount}</span>
+          <VoiceOrb state={audioState} amplitude={amplitude} />
+
+          {partialTranscript && (
+            <p className="text-xs text-label-tertiary max-w-[180px] text-center italic line-clamp-2">
+              {partialTranscript}
+            </p>
+          )}
+
+          <button
+            onClick={endInterview}
+            disabled={ending}
+            className="text-xs text-label-secondary hover:text-destructive transition-colors disabled:opacity-50 mt-2"
+          >
+            {ending ? "Ending…" : "End Interview"}
+          </button>
         </div>
 
-        <div className="text-xs text-text-secondary">
-          <InterviewTimer
-            startedAt={startedAt}
-            durationSeconds={durationSeconds}
-            onExpired={endInterview}
-          />
+        {/* Right: transcript */}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto pb-4">
+            {turns.length === 0 && audioState === "connecting" && (
+              <div className="flex items-center justify-center h-40">
+                <p className="text-sm text-label-tertiary">Connecting to your interviewer…</p>
+              </div>
+            )}
+
+            {turns.map((turn) => (
+              <div
+                key={turn.id}
+                className={cn(
+                  "flex gap-3",
+                  turn.speaker === "candidate" ? "flex-row-reverse" : "flex-row"
+                )}
+              >
+                {/* Avatar */}
+                <div className={cn(
+                  "w-7 h-7 rounded-md flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5",
+                  turn.speaker === "interviewer"
+                    ? "bg-accent text-white"
+                    : "bg-bg-card border border-separator text-label-secondary"
+                )}>
+                  {turn.speaker === "interviewer" ? "AI" : "Me"}
+                </div>
+
+                {/* Bubble */}
+                <div className={cn(
+                  "max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed",
+                  turn.speaker === "interviewer"
+                    ? "bg-bg-card border border-separator text-label-primary"
+                    : "bg-accent/10 text-label-primary border border-accent/20"
+                )}>
+                  {turn.text}
+                </div>
+              </div>
+            ))}
+
+            {/* Live partial transcript */}
+            {partialTranscript && (
+              <div className="flex gap-3 flex-row-reverse opacity-60">
+                <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5 bg-bg-card border border-separator text-label-secondary">
+                  Me
+                </div>
+                <div className="max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed bg-accent/5 border border-accent/10 text-label-secondary italic">
+                  {partialTranscript}
+                </div>
+              </div>
+            )}
+
+            <div ref={transcriptEndRef} />
+          </div>
         </div>
 
-        <button
-          onClick={endInterview}
-          disabled={ending}
-          className="text-xs text-text-secondary hover:text-destructive transition-colors disabled:opacity-50"
-        >
-          {ending ? "Ending…" : "End Interview"}
-        </button>
       </div>
     </div>
   )
