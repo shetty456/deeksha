@@ -199,9 +199,9 @@ export default function InterviewClient({
   }, [ending, endInterview, persistTurn, addTurn, getAIResponse])
 
   useEffect(() => {
-    if (hasInitialized.current) return   // React Strict Mode guard — prevent double-init
+    isMountedRef.current = true          // always reset on mount — must be before the guard
+    if (hasInitialized.current) return   // prevent double-init from React Strict Mode
     hasInitialized.current = true
-    isMountedRef.current = true
 
     async function init() {
       setAudioState("connecting")
