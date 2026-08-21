@@ -131,7 +131,13 @@ export default function InterviewClient({
         body: JSON.stringify(ctx),
       })
 
-      if (!res.ok || !res.body || !isMountedRef.current) return
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        console.error("[interview] respond error:", res.status, err)
+        setAudioState("error")
+        return
+      }
+      if (!res.body || !isMountedRef.current) return
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
@@ -250,7 +256,13 @@ export default function InterviewClient({
           body: JSON.stringify(ctx),
         })
 
-        if (!res.ok || !res.body || !isMountedRef.current) return
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          console.error("[interview] respond error:", res.status, err)
+          setAudioState("error")
+          return
+        }
+        if (!res.body || !isMountedRef.current) return
 
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
