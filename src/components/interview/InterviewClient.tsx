@@ -25,16 +25,23 @@ interface TranscriptTurn {
   id: number
 }
 
-const STATE_LABELS: Record<AudioState, string> = {
-  idle:         "Getting ready…",
+const STATE_LABEL: Record<AudioState, string> = {
+  idle:         "Starting…",
   connecting:   "Connecting…",
   listening:    "Listening",
+  interrupted:  "Listening",
   thinking:     "Thinking…",
   speaking:     "Speaking",
-  interrupted:  "Listening",
   reconnecting: "Reconnecting…",
-  ended:        "Interview ended",
-  error:        "Something went wrong",
+  ended:        "Ending…",
+  error:        "Connection error",
+}
+
+const STATE_SUBLABEL: Partial<Record<AudioState, string>> = {
+  listening:  "Your mic is open — speak when ready",
+  thinking:   "Formulating a response…",
+  speaking:   "Interviewer is speaking",
+  connecting: "Setting up your interview session",
 }
 
 let turnId = 0
@@ -43,22 +50,21 @@ export default function InterviewClient({
   interviewId, question, category, difficulty, durationSeconds,
 }: Props) {
   const router = useRouter()
-  const [audioState, setAudioState]         = useState<AudioState>("idle")
-  const [amplitude, setAmplitude]           = useState(0)
-  const [startedAt, setStartedAt]           = useState<number | null>(null)
+  const [audioState, setAudioState]               = useState<AudioState>("idle")
+  const [amplitude, setAmplitude]                 = useState(0)
+  const [startedAt, setStartedAt]                 = useState<number | null>(null)
   const [partialTranscript, setPartialTranscript] = useState("")
-  const [turns, setTurns]                   = useState<TranscriptTurn[]>([])
-  const [ending, setEnding]                 = useState(false)
+  const [turns, setTurns]                         = useState<TranscriptTurn[]>([])
+  const [ending, setEnding]                       = useState(false)
 
-  const recognizerRef  = useRef<DeepgramSpeechRecognizer | null>(null)
-  const synthesizerRef = useRef<DeepgramSpeechSynthesizer | null>(null)
-  const engineRef      = useRef<InterviewEngine | null>(null)
-  const rafRef         = useRef(0)
-  const sequenceRef    = useRef(0)
-  const isMountedRef   = useRef(true)
+  const recognizerRef    = useRef<DeepgramSpeechRecognizer | null>(null)
+  const synthesizerRef   = useRef<DeepgramSpeechSynthesizer | null>(null)
+  const engineRef        = useRef<InterviewEngine | null>(null)
+  const rafRef           = useRef(0)
+  const sequenceRef      = useRef(0)
+  const isMountedRef     = useRef(true)
   const transcriptEndRef = useRef<HTMLDivElement | null>(null)
 
-  // Auto-scroll transcript
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [turns, partialTranscript])
@@ -69,7 +75,7 @@ export default function InterviewClient({
 
   const persistTurn = useCallback(async (speaker: "interviewer" | "candidate", text: string) => {
     sequenceRef.current++
-    await fetch("/api/interview/turns", {
+    fetch("/api/interview/turns", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -86,14 +92,12 @@ export default function InterviewClient({
     if (ending) return
     setEnding(true)
     setAudioState("ended")
-
     recognizerRef.current?.stopListening()
     recognizerRef.current?.disconnect()
     synthesizerRef.current?.interrupt()
     synthesizerRef.current?.disconnect()
     engineRef.current?.end()
     cancelAnimationFrame(rafRef.current)
-
     logEvent("interview_completed")
 
     await fetch("/api/interview/complete", {
@@ -109,12 +113,14 @@ export default function InterviewClient({
       body: JSON.stringify({ interview_id: interviewId }),
     }).catch(() => {})
     logEvent("evaluation_completed")
-
     router.push(`/results/${interviewId}`)
   }, [ending, interviewId, router])
 
-  /** Get AI response for a given context, stream it through TTS, return full text */
-  const getAIResponse = useCallback(async (engine: InterviewEngine, synth: DeepgramSpeechSynthesizer, recog: DeepgramSpeechRecognizer): Promise<string | null> => {
+  const getAIResponse = useCallback(async (
+    engine: InterviewEngine,
+    synth: DeepgramSpeechSynthesizer,
+    recog: DeepgramSpeechRecognizer,
+  ): Promise<string | null> => {
     setAudioState("thinking")
     logEvent("llm_started")
 
@@ -127,7 +133,7 @@ export default function InterviewClient({
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      console.error("[interview] respond error:", res.status, err)
+      console.error("[interview] respond:", res.status, err)
       setAudioState("error")
       return null
     }
@@ -136,30 +142,27 @@ export default function InterviewClient({
     const reader  = res.body.getReader()
     const decoder = new TextDecoder()
     let firstToken = true
-    let fullResponse = ""
+    let full = ""
 
-    async function* tokenStream(): AsyncIterable<string> {
+    async function* stream(): AsyncIterable<string> {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         const text = decoder.decode(value, { stream: true })
         if (firstToken) { logEvent("llm_first_token"); firstToken = false }
-        fullResponse += text
+        full += text
         yield text
       }
     }
 
-    // Mute mic while AI speaks to prevent echo
     recog.mute()
     setAudioState("speaking")
     logEvent("tts_started")
-
-    await synth.speak(tokenStream())
-
+    await synth.speak(stream())
     recog.unmute()
 
     if (!isMountedRef.current) return null
-    return fullResponse
+    return full
   }, [])
 
   const handleCandidateTurn = useCallback(async (transcript: string) => {
@@ -172,7 +175,7 @@ export default function InterviewClient({
     engine.addCandidateTurn(transcript)
     addTurn("candidate", transcript)
     setPartialTranscript("")
-    await persistTurn("candidate", transcript)
+    persistTurn("candidate", transcript)
     logEvent("user_turn_ended")
 
     if (!engine.shouldContinue()) { await endInterview(); return }
@@ -182,11 +185,10 @@ export default function InterviewClient({
 
     engine.addInterviewerTurn(response)
     addTurn("interviewer", response)
-    await persistTurn("interviewer", response)
+    persistTurn("interviewer", response)
     setAudioState("listening")
   }, [ending, endInterview, persistTurn, addTurn, getAIResponse])
 
-  // Initialise on mount
   useEffect(() => {
     isMountedRef.current = true
 
@@ -201,7 +203,6 @@ export default function InterviewClient({
       recognizerRef.current  = recognizer
       synthesizerRef.current = synthesizer
       engineRef.current      = engine
-
       engine.start({ interviewId, question, category, difficulty, durationSeconds })
 
       try {
@@ -209,17 +210,15 @@ export default function InterviewClient({
         logEvent("microphone_connected")
         await synthesizer.connect()
 
-        // Amplitude poll for orb
         const pollAmp = () => {
           setAmplitude(synthesizer.getAmplitude())
           rafRef.current = requestAnimationFrame(pollAmp)
         }
         rafRef.current = requestAnimationFrame(pollAmp)
 
-        // Wire STT callbacks
         recognizer.onPartialTranscript((text) => {
           setPartialTranscript(text)
-          // Barge-in: first partial while AI is speaking → interrupt
+          // Barge-in on first partial while AI speaks
           setAudioState((prev) => {
             if (prev === "speaking") {
               synthesizerRef.current?.interrupt()
@@ -230,20 +229,12 @@ export default function InterviewClient({
             return prev
           })
         })
+
         recognizer.onFinalTranscript((text) => {
           if (!text.trim()) return
           handleCandidateTurn(text)
         })
-        recognizer.onSpeechStarted(() => {
-          logEvent("user_turn_started")
-          // Barge-in: interrupt AI if speaking
-          if (synthesizerRef.current && audioState === "speaking") {
-            synthesizerRef.current.interrupt()
-            recognizer.unmute()
-            logEvent("ai_interrupted")
-            setAudioState("interrupted")
-          }
-        })
+
         recognizer.onSpeechEnded(() => setPartialTranscript(""))
         recognizer.onError((err) => { console.error("STT:", err); setAudioState("error") })
 
@@ -251,17 +242,16 @@ export default function InterviewClient({
         logEvent("stt_connected")
         setStartedAt(Date.now())
 
-        // AI opens the interview
         const response = await getAIResponse(engine, synthesizer, recognizer)
         if (!response || !isMountedRef.current) return
 
         engine.addInterviewerTurn(response)
         addTurn("interviewer", response)
-        await persistTurn("interviewer", response)
+        persistTurn("interviewer", response)
         setAudioState("listening")
 
       } catch (err) {
-        console.error("Interview init error:", err)
+        console.error("Interview init:", err)
         setAudioState("error")
       }
     }
@@ -281,94 +271,117 @@ export default function InterviewClient({
   const categoryLabel = category.replace(/_/g, " ")
 
   return (
-    <div className="min-h-dvh bg-bg-primary flex flex-col">
-      {/* Nav */}
-      <nav className="sticky top-0 z-50 bg-bg-primary/80 backdrop-blur-xl border-b border-separator">
-        <div className="max-w-4xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="text-sm font-semibold text-label-primary">Deeksha</span>
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-label-secondary capitalize">{categoryLabel}</span>
-            <InterviewTimer
-              startedAt={startedAt}
-              durationSeconds={durationSeconds}
-              onExpired={endInterview}
-            />
-          </div>
+    <div className="min-h-dvh flex flex-col" style={{ background: "#09090b" }}>
+
+      {/* Nav — minimal, dark */}
+      <nav className="flex items-center justify-between px-6 h-14 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+        <span className="text-sm font-semibold text-white/80 tracking-tight">Deeksha</span>
+        <div className="flex items-center gap-4">
+          <span className="text-xs capitalize" style={{ color: "rgba(255,255,255,0.4)" }}>{categoryLabel}</span>
+          <span className="text-xs tabular-nums" style={{ color: "rgba(255,255,255,0.4)" }}>
+            <InterviewTimer startedAt={startedAt} durationSeconds={durationSeconds} onExpired={endInterview} />
+          </span>
         </div>
       </nav>
 
-      {/* Body — orb left, transcript right */}
-      <div className="flex-1 max-w-4xl mx-auto w-full px-6 py-8 flex flex-col lg:flex-row gap-6">
+      {/* Body */}
+      <div className="flex-1 flex flex-col lg:flex-row">
 
-        {/* Left: orb + state */}
-        <div className="lg:w-64 flex flex-col items-center justify-center gap-6 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-8rem)]">
-          <p className="text-sm font-medium text-label-secondary tracking-wide">
-            {STATE_LABELS[audioState]}
-          </p>
+        {/* Left — orb panel */}
+        <div className="lg:w-[380px] flex flex-col items-center justify-center gap-6 px-8 py-12 lg:py-0 lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)]">
+
+          {/* State label */}
+          <div className="text-center space-y-1.5 h-12 flex flex-col justify-end">
+            <p className="text-base font-semibold text-white/90 tracking-tight">
+              {STATE_LABEL[audioState]}
+            </p>
+            {STATE_SUBLABEL[audioState] && (
+              <p className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+                {STATE_SUBLABEL[audioState]}
+              </p>
+            )}
+          </div>
 
           <VoiceOrb state={audioState} amplitude={amplitude} />
 
-          {partialTranscript && (
-            <p className="text-xs text-label-tertiary max-w-[180px] text-center italic line-clamp-2">
-              {partialTranscript}
-            </p>
-          )}
+          {/* Partial transcript hint */}
+          <div className="h-8 flex items-center">
+            {partialTranscript && (
+              <p className="text-xs text-center max-w-[200px] italic" style={{ color: "rgba(255,255,255,0.4)" }}>
+                {partialTranscript}
+              </p>
+            )}
+          </div>
 
           <button
             onClick={endInterview}
             disabled={ending}
-            className="text-xs text-label-secondary hover:text-destructive transition-colors disabled:opacity-50 mt-2"
+            className="text-xs px-4 py-2 rounded-md border transition-colors disabled:opacity-40"
+            style={{ color: "rgba(255,255,255,0.4)", borderColor: "rgba(255,255,255,0.12)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--destructive)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.4)")}
           >
             {ending ? "Ending…" : "End Interview"}
           </button>
         </div>
 
-        {/* Right: transcript */}
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1 space-y-4 overflow-y-auto pb-4">
-            {turns.length === 0 && audioState === "connecting" && (
-              <div className="flex items-center justify-center h-40">
-                <p className="text-sm text-label-tertiary">Connecting to your interviewer…</p>
+        {/* Divider */}
+        <div className="hidden lg:block w-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+
+        {/* Right — transcript */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-6 py-8 space-y-5">
+
+            {turns.length === 0 && (
+              <div className="flex items-center justify-center h-48">
+                <p className="text-sm" style={{ color: "rgba(255,255,255,0.2)" }}>
+                  The conversation will appear here.
+                </p>
               </div>
             )}
 
             {turns.map((turn) => (
               <div
                 key={turn.id}
-                className={cn(
-                  "flex gap-3",
-                  turn.speaker === "candidate" ? "flex-row-reverse" : "flex-row"
-                )}
+                className={cn("flex gap-3 turn-animate", turn.speaker === "candidate" ? "flex-row-reverse" : "flex-row")}
               >
-                {/* Avatar */}
-                <div className={cn(
-                  "w-7 h-7 rounded-md flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5",
-                  turn.speaker === "interviewer"
-                    ? "bg-accent text-white"
-                    : "bg-bg-card border border-separator text-label-secondary"
-                )}>
+                {/* Speaker chip */}
+                <div
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
+                  style={turn.speaker === "interviewer"
+                    ? { background: "var(--accent)", color: "#fff" }
+                    : { background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.12)" }
+                  }
+                >
                   {turn.speaker === "interviewer" ? "AI" : "Me"}
                 </div>
 
                 {/* Bubble */}
-                <div className={cn(
-                  "max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed",
-                  turn.speaker === "interviewer"
-                    ? "bg-bg-card border border-separator text-label-primary"
-                    : "bg-accent/10 text-label-primary border border-accent/20"
-                )}>
+                <div
+                  className="max-w-[78%] rounded-xl px-4 py-3 text-sm leading-relaxed"
+                  style={turn.speaker === "interviewer"
+                    ? { background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.9)", border: "1px solid rgba(255,255,255,0.08)" }
+                    : { background: "rgba(10,132,255,0.15)", color: "rgba(255,255,255,0.85)", border: "1px solid rgba(10,132,255,0.2)" }
+                  }
+                >
                   {turn.text}
                 </div>
               </div>
             ))}
 
-            {/* Live partial transcript */}
+            {/* Partial — faded right-aligned */}
             {partialTranscript && (
-              <div className="flex gap-3 flex-row-reverse opacity-60">
-                <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5 bg-bg-card border border-separator text-label-secondary">
+              <div className="flex gap-3 flex-row-reverse opacity-50 turn-animate">
+                <div
+                  className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
+                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.08)" }}
+                >
                   Me
                 </div>
-                <div className="max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed bg-accent/5 border border-accent/10 text-label-secondary italic">
+                <div
+                  className="max-w-[78%] rounded-xl px-4 py-3 text-sm leading-relaxed italic"
+                  style={{ background: "rgba(10,132,255,0.08)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(10,132,255,0.1)" }}
+                >
                   {partialTranscript}
                 </div>
               </div>
@@ -377,7 +390,6 @@ export default function InterviewClient({
             <div ref={transcriptEndRef} />
           </div>
         </div>
-
       </div>
     </div>
   )
