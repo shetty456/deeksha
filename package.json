@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:whisper": "bash scripts/dev-whisper.sh",
     "build": "next build",
     "start": "next start"
   },

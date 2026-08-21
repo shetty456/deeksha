@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import type { AudioState } from "@/lib/voice/types"
+import type { AudioState, SpeechRecognizer } from "@/lib/voice/types"
 import { DeepgramSpeechRecognizer } from "@/lib/voice/deepgram-recognizer"
+import { WhisperRecognizer } from "@/lib/voice/whisper-recognizer"
 import { DeepgramSpeechSynthesizer } from "@/lib/voice/deepgram-synthesizer"
 import { InterviewEngine, type Question } from "@/lib/interview/engine"
 import { logEvent } from "@/lib/telemetry"
@@ -57,7 +58,7 @@ export default function InterviewClient({
   const [turns, setTurns]                         = useState<TranscriptTurn[]>([])
   const [ending, setEnding]                       = useState(false)
 
-  const recognizerRef    = useRef<DeepgramSpeechRecognizer | null>(null)
+  const recognizerRef    = useRef<SpeechRecognizer | null>(null)
   const synthesizerRef   = useRef<DeepgramSpeechSynthesizer | null>(null)
   const engineRef        = useRef<InterviewEngine | null>(null)
   const rafRef           = useRef(0)
@@ -121,7 +122,7 @@ export default function InterviewClient({
   const getAIResponse = useCallback(async (
     engine: InterviewEngine,
     synth: DeepgramSpeechSynthesizer,
-    recog: DeepgramSpeechRecognizer,
+    recog: SpeechRecognizer,
   ): Promise<string | null> => {
     setAudioState("thinking")
     logEvent("llm_started")
@@ -207,7 +208,10 @@ export default function InterviewClient({
       setAudioState("connecting")
       logEvent("interview_started")
 
-      const recognizer  = new DeepgramSpeechRecognizer()
+      const recognizer: SpeechRecognizer =
+        process.env.NEXT_PUBLIC_STT_PROVIDER === "whisper"
+          ? new WhisperRecognizer()
+          : new DeepgramSpeechRecognizer()
       const synthesizer = new DeepgramSpeechSynthesizer()
       const engine      = new InterviewEngine()
 

@@ -14,6 +14,8 @@ export interface SpeechRecognizer {
   disconnect(): void
   startListening(): void
   stopListening(): void
+  mute(): void
+  unmute(): void
   onPartialTranscript(callback: (text: string) => void): void
   onFinalTranscript(callback: (text: string) => void): void
   onSpeechStarted(callback: () => void): void
