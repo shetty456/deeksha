@@ -63,6 +63,8 @@ export default function InterviewClient({
   const rafRef           = useRef(0)
   const sequenceRef      = useRef(0)
   const isMountedRef     = useRef(true)
+  const hasInitialized   = useRef(false)   // prevents React Strict Mode double-init
+  const isProcessingTurn = useRef(false)   // prevents concurrent handleCandidateTurn calls
   const transcriptEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -167,29 +169,38 @@ export default function InterviewClient({
 
   const handleCandidateTurn = useCallback(async (transcript: string) => {
     if (!isMountedRef.current || ending) return
-    const engine = engineRef.current
-    const synth  = synthesizerRef.current
-    const recog  = recognizerRef.current
-    if (!engine || !synth || !recog) return
+    if (isProcessingTurn.current) return   // drop if a turn is already in flight
+    isProcessingTurn.current = true
 
-    engine.addCandidateTurn(transcript)
-    addTurn("candidate", transcript)
-    setPartialTranscript("")
-    persistTurn("candidate", transcript)
-    logEvent("user_turn_ended")
+    try {
+      const engine = engineRef.current
+      const synth  = synthesizerRef.current
+      const recog  = recognizerRef.current
+      if (!engine || !synth || !recog) return
 
-    if (!engine.shouldContinue()) { await endInterview(); return }
+      engine.addCandidateTurn(transcript)
+      addTurn("candidate", transcript)
+      setPartialTranscript("")
+      persistTurn("candidate", transcript)
+      logEvent("user_turn_ended")
 
-    const response = await getAIResponse(engine, synth, recog)
-    if (!response || !isMountedRef.current) return
+      if (!engine.shouldContinue()) { await endInterview(); return }
 
-    engine.addInterviewerTurn(response)
-    addTurn("interviewer", response)
-    persistTurn("interviewer", response)
-    setAudioState("listening")
+      const response = await getAIResponse(engine, synth, recog)
+      if (!response || !isMountedRef.current) return
+
+      engine.addInterviewerTurn(response)
+      addTurn("interviewer", response)
+      persistTurn("interviewer", response)
+      setAudioState("listening")
+    } finally {
+      isProcessingTurn.current = false
+    }
   }, [ending, endInterview, persistTurn, addTurn, getAIResponse])
 
   useEffect(() => {
+    if (hasInitialized.current) return   // React Strict Mode guard — prevent double-init
+    hasInitialized.current = true
     isMountedRef.current = true
 
     async function init() {
@@ -231,8 +242,11 @@ export default function InterviewClient({
         })
 
         recognizer.onFinalTranscript((text) => {
-          if (!text.trim()) return
-          handleCandidateTurn(text)
+          const clean = text.trim()
+          if (!clean) return
+          // Ignore single words / filler ("So", "Um", "Okay") — not a real turn
+          if (clean.split(/\s+/).length < 4) return
+          handleCandidateTurn(clean)
         })
 
         recognizer.onSpeechEnded(() => setPartialTranscript(""))

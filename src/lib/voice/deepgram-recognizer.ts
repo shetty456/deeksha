@@ -47,7 +47,7 @@ export class DeepgramSpeechRecognizer implements SpeechRecognizer {
       language:        "en-US",
       smart_format:    "true",
       interim_results: "true",
-      endpointing:     "400",   // ms of silence = end of utterance
+      endpointing:     "1500",  // ms of silence = end of utterance (400 was too aggressive, fragmented speech)
       punctuate:       "true",
     })
 
