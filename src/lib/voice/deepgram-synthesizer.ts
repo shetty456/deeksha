@@ -1,3 +1,4 @@
+import { devLog } from "@/lib/dev-log"
 import type { SpeechSynthesizer } from "./types"
 
 export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
@@ -61,8 +62,10 @@ export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
       if (!sentence.trim() || signal.aborted) return
       try {
         await this.synthesizeAndPlay(sentence, signal)
-      } catch {
-        // interrupted or aborted — swallow
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return  // intentional interrupt — fine
+        devLog.push("error", "tts flush error", String(err))
+        console.error("[tts] synthesize:", err)
       }
     }
 
@@ -91,19 +94,35 @@ export class DeepgramSpeechSynthesizer implements SpeechSynthesizer {
   private async synthesizeAndPlay(text: string, signal: AbortSignal): Promise<void> {
     if (!this.audioContext || signal.aborted) return
 
+    // Browser suspends AudioContext after inactivity — resume before playing
+    if (this.audioContext.state !== "running") {
+      try { await this.audioContext.resume() } catch { /* ignore */ }
+    }
+
+    const t0 = Date.now()
+    devLog.push("req", "→ /api/tts", `"${text.slice(0, 40)}"`)
     const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
       signal,
     })
+    devLog.push("res", "← /api/tts", String(res.status), Date.now() - t0)
 
     if (!res.ok || !res.body || signal.aborted) return
 
     const arrayBuffer = await res.arrayBuffer()
     if (signal.aborted || !this.audioContext) return
 
-    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
+    let audioBuffer: AudioBuffer
+    try {
+      audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
+    } catch (err) {
+      devLog.push("error", "tts decode failed", String(err))
+      console.error("[tts] decodeAudioData:", err)
+      return
+    }
+
     if (signal.aborted || !this.audioContext) return
 
     const source = this.audioContext.createBufferSource()

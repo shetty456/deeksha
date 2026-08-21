@@ -1,8 +1,9 @@
 import { devLog } from "@/lib/dev-log"
 import type { SpeechRecognizer } from "./types"
 
-const SILENCE_THRESHOLD = 0.015  // RMS below this = silence
+const SILENCE_THRESHOLD = 0.018  // RMS below this = silence
 const SILENCE_DURATION_MS = 1500 // ms of silence after speech before we send to Whisper
+const MIN_SPEECH_DURATION_MS = 2000 // ignore segments shorter than this (blocks noise triggers)
 const POLL_INTERVAL_MS = 100
 
 export class WhisperRecognizer implements SpeechRecognizer {
@@ -15,6 +16,7 @@ export class WhisperRecognizer implements SpeechRecognizer {
   private muted = false
   private isListening = false
   private isSpeaking = false
+  private speechStartedAt = 0
   private chunks: Blob[] = []
 
   private pollTimer: ReturnType<typeof setInterval> | null = null
@@ -114,6 +116,7 @@ export class WhisperRecognizer implements SpeechRecognizer {
     if (loud && !this.isSpeaking) {
       // Speech onset
       this.isSpeaking = true
+      this.speechStartedAt = Date.now()
       this.clearSilenceTimer()
       devLog.push("stt", "speech start")
       this.speechStartedCallback?.()
@@ -124,6 +127,13 @@ export class WhisperRecognizer implements SpeechRecognizer {
         this.silenceTimer = null
         this.isSpeaking = false
         this.speechEndedCallback?.()
+        const duration = Date.now() - this.speechStartedAt
+        if (duration < MIN_SPEECH_DURATION_MS) {
+          devLog.push("stt", "segment too short, skipped", `${duration}ms`)
+          this.chunks = []
+          if (this.mediaRecorder?.state === "recording") this.mediaRecorder.stop()
+          return
+        }
         this.stopAndTranscribe()
       }, SILENCE_DURATION_MS)
     } else if (loud && this.isSpeaking) {

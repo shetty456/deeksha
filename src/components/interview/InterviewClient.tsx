@@ -175,6 +175,7 @@ export default function InterviewClient({
     devLog.push("tts", "→ TTS speak")
     await synth.speak(stream())
     devLog.push("tts", "← TTS done", undefined, Date.now() - ttsStart)
+    devLog.push("info", "AI said", `"${full.slice(0, 60)}${full.length > 60 ? "…" : ""}"`)
     recog.unmute()
 
     if (!isMountedRef.current) return null
