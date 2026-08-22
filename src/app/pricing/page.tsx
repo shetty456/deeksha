@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Script from "next/script"
 import { COIN_PACKS, COIN_COST } from "@/lib/coins"
 import { cn } from "@/lib/utils"
 
@@ -70,8 +71,7 @@ export default function PricingPage() {
 
   return (
     <>
-      {/* Razorpay checkout script */}
-      <script src="https://checkout.razorpay.com/v1/checkout.js" async />
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="beforeInteractive" />
 
       <div className="min-h-dvh bg-bg-primary">
         <nav className="sticky top-0 z-50 bg-bg-primary/80 backdrop-blur-xl border-b border-separator">
