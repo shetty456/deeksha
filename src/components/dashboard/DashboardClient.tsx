@@ -165,9 +165,8 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
     else if (step === "duration") setStep("difficulty")
   }
 
-  const sessionCost    = COIN_COST[duration]
-  const canAfford      = balance !== null && balance.total >= sessionCost
-  const hasAnyCoins    = balance === null || balance.total >= 10  // min cost for 5-min session
+  const sessionCost = COIN_COST[duration]
+  const canAfford   = balance === null || balance.total >= sessionCost
 
   // ── Home ────────────────────────────────────────────────
   if (step === "home") {
@@ -213,33 +212,15 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
           {/* Start CTA */}
           <div className="bg-accent rounded-2xl p-6 space-y-4">
             <div className="space-y-1">
-              {hasAnyCoins ? (
-                <>
-                  <p className="text-white font-semibold text-lg">Ready to practice?</p>
-                  <p className="text-white/70 text-sm">Pick a type, level, and duration — takes 10 seconds.</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-white font-semibold text-lg">You&apos;re out of coins</p>
-                  <p className="text-white/70 text-sm">Top up to start your next interview session.</p>
-                </>
-              )}
+              <p className="text-white font-semibold text-lg">Ready to practice?</p>
+              <p className="text-white/70 text-sm">Pick a type, level, and duration — takes 10 seconds.</p>
             </div>
-            {hasAnyCoins ? (
-              <button
-                onClick={() => setStep("category")}
-                className="bg-white text-accent font-semibold text-sm px-5 py-2.5 rounded-md hover:opacity-90 transition-opacity"
-              >
-                Start Interview →
-              </button>
-            ) : (
-              <button
-                onClick={() => router.push("/pricing")}
-                className="bg-white text-accent font-semibold text-sm px-5 py-2.5 rounded-md hover:opacity-90 transition-opacity"
-              >
-                Buy Coins →
-              </button>
-            )}
+            <button
+              onClick={() => setStep("category")}
+              className="bg-white text-accent font-semibold text-sm px-5 py-2.5 rounded-md hover:opacity-90 transition-opacity"
+            >
+              Start Interview →
+            </button>
           </div>
 
           {/* Recent */}
@@ -446,21 +427,27 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
             </div>
 
             <div className="space-y-3">
-              {balance !== null && !canAfford && (
-                <p className="text-xs text-label-tertiary text-center">
-                  You need {sessionCost} coins for this session.{" "}
-                  <button onClick={() => router.push("/pricing")} className="text-accent underline">
-                    Buy more coins →
+              {canAfford ? (
+                <button
+                  onClick={handleStart}
+                  disabled={starting}
+                  className="w-full bg-accent text-white font-semibold text-sm py-3.5 rounded-md hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-50"
+                >
+                  {starting ? "Starting…" : `Start Interview · ${sessionCost} coins`}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-label-tertiary text-center">
+                    You have {balance?.total ?? 0} coins — this session needs {sessionCost}
+                  </p>
+                  <button
+                    onClick={() => router.push("/pricing")}
+                    className="w-full bg-accent text-white font-semibold text-sm py-3.5 rounded-md hover:opacity-90 active:scale-[0.99] transition-all"
+                  >
+                    Buy Coins to Continue →
                   </button>
-                </p>
+                </div>
               )}
-              <button
-                onClick={handleStart}
-                disabled={starting || !canAfford}
-                className="w-full bg-accent text-white font-semibold text-sm py-3.5 rounded-md hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-50"
-              >
-                {starting ? "Starting…" : canAfford ? `Start Interview · ${sessionCost} coins` : "Insufficient coins"}
-              </button>
             </div>
           </div>
         )}
