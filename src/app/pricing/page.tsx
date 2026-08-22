@@ -2,9 +2,19 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Script from "next/script"
 import { COIN_PACKS, COIN_COST } from "@/lib/coins"
 import { cn } from "@/lib/utils"
+
+function loadRazorpayScript(): Promise<void> {
+  return new Promise((resolve) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).Razorpay) { resolve(); return }
+    const script = document.createElement("script")
+    script.src = "https://checkout.razorpay.com/v1/checkout.js"
+    script.onload = () => resolve()
+    document.body.appendChild(script)
+  })
+}
 
 const SESSION_COSTS = [
   { label: "5 min",  seconds: 300,  coins: COIN_COST[300]  },
@@ -22,6 +32,8 @@ export default function PricingPage() {
     setPurchasing(packId)
     setError(null)
     try {
+      await loadRazorpayScript()
+
       // Create Razorpay order
       const res = await fetch("/api/coins/purchase", {
         method: "POST",
@@ -70,10 +82,7 @@ export default function PricingPage() {
   }
 
   return (
-    <>
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="beforeInteractive" />
-
-      <div className="min-h-dvh bg-bg-primary">
+    <div className="min-h-dvh bg-bg-primary">
         <nav className="sticky top-0 z-50 bg-bg-primary/80 backdrop-blur-xl border-b border-separator">
           <div className="max-w-lg mx-auto px-6 h-14 flex items-center justify-between">
             <button
@@ -190,6 +199,5 @@ export default function PricingPage() {
 
         </main>
       </div>
-    </>
   )
 }
