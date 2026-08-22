@@ -22,9 +22,14 @@ export default function CoinBottomSheet({
 }: Props) {
   const shortfall = Math.max(0, neededCoins - currentBalance)
 
-  // Smallest pack that covers the shortfall — pre-selected for the user
+  // Show only 3 packs (Starter, Value, Power) — decoy effect:
+  // Starter anchors cheap, Power makes Value look smart, everyone picks Value.
+  const VISIBLE_PACKS = COIN_PACKS.slice(0, 3)
+
+  // Smallest visible pack that covers the shortfall — pre-selected for the user
   const recommendedPack = useMemo(
-    () => COIN_PACKS.find((p) => p.coins >= shortfall) ?? COIN_PACKS[0],
+    () => VISIBLE_PACKS.find((p) => p.coins >= shortfall) ?? VISIBLE_PACKS[1],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [shortfall]
   )
 
@@ -132,11 +137,10 @@ export default function CoinBottomSheet({
 
           {/* Pack selection — radio pattern, selecting ≠ paying */}
           <div className="space-y-2">
-            {COIN_PACKS.map((pack) => {
-              const isSelected     = pack.id === selectedPackId
-              const isRecommended  = pack.id === recommendedPack.id
-              // How many sessions like this one does this pack unlock?
-              const sessions = Math.floor(pack.coins / neededCoins)
+            {VISIBLE_PACKS.map((pack) => {
+              const isSelected    = pack.id === selectedPackId
+              const isPopular     = pack.id === "value"
+              const sessions      = Math.floor(pack.coins / neededCoins)
 
               return (
                 <button
@@ -168,9 +172,9 @@ export default function CoinBottomSheet({
                       )}>
                         {pack.coins.toLocaleString("en-IN")} coins
                       </span>
-                      {isRecommended && (
+                      {isPopular && (
                         <span className="text-[10px] font-semibold text-accent bg-accent/10 px-2 py-0.5 rounded-full">
-                          Recommended
+                          Most popular
                         </span>
                       )}
                     </div>
@@ -195,7 +199,7 @@ export default function CoinBottomSheet({
           </div>
 
           {/* Single CTA — the only colored element, price updates with selection */}
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <button
               onClick={handlePay}
               disabled={purchasing}
