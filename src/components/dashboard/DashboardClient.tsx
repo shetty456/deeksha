@@ -13,6 +13,7 @@ import {
   type Duration,
 } from "@/lib/interview/categories"
 import { COIN_COST, type CoinBalance } from "@/lib/coins"
+import CoinBottomSheet from "@/components/coins/CoinBottomSheet"
 import { cn } from "@/lib/utils"
 
 interface RecentInterview {
@@ -112,6 +113,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
   const [starting, setStarting] = useState(false)
   const [coinError, setCoinError] = useState<string | null>(null)
   const [balance, setBalance] = useState<CoinBalance | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const displayName = user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "there"
   const hour = new Date().getHours()
@@ -441,7 +443,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
                     You have {balance?.total ?? 0} coins — this session needs {sessionCost}
                   </p>
                   <button
-                    onClick={() => router.push("/pricing")}
+                    onClick={() => setSheetOpen(true)}
                     className="w-full bg-accent text-white font-semibold text-sm py-3.5 rounded-md hover:opacity-90 active:scale-[0.99] transition-all"
                   >
                     Buy Coins to Continue →
@@ -449,6 +451,21 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
                 </div>
               )}
             </div>
+
+            <CoinBottomSheet
+              open={sheetOpen}
+              onClose={() => setSheetOpen(false)}
+              currentBalance={balance?.total ?? 0}
+              neededCoins={sessionCost}
+              onPurchaseSuccess={(coinsAdded) => {
+                setBalance((prev) => prev
+                  ? { ...prev, total: prev.total + coinsAdded }
+                  : { total: coinsAdded, expiresAt: null }
+                )
+                // Sync true balance from server after webhook processes
+                setTimeout(fetchBalance, 3000)
+              }}
+            />
           </div>
         )}
 
