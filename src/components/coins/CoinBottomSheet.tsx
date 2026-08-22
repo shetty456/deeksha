@@ -195,11 +195,11 @@ export default function CoinBottomSheet({
           </div>
 
           {/* Single CTA — the only colored element, price updates with selection */}
-          <div className="space-y-2 pt-1">
+          <div className="space-y-2">
             <button
               onClick={handlePay}
               disabled={purchasing}
-              className="w-full bg-accent text-white font-semibold py-3.5 rounded-xl hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-50"
+              className="w-full bg-accent text-white font-semibold text-sm py-3.5 rounded-md hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-50"
             >
               {purchasing ? "Opening payment…" : `Pay ${selectedPack.priceDisplay} →`}
             </button>
