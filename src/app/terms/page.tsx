@@ -62,19 +62,27 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="4. Credits and billing">
+        <Section title="4. Coins and billing">
           <p>
-            Deeksha uses a credit-based system. Credits are consumed each time you start an
-            interview session. Free accounts receive a limited number of credits per month.
-            Paid plans provide additional credits on a monthly basis.
+            Deeksha uses a coin-based system. Coins are deducted when you start an interview
+            session. New accounts receive 30 free coins on sign-up (enough for one 30-minute
+            session). Additional coins can be purchased in packs via Razorpay.
           </p>
           <p>
-            Unused credits from a billing period do not roll over unless otherwise stated in
-            your plan. Refunds are not provided for unused credits.
+            Session costs: 5 minutes costs 10 coins, 10 minutes costs 20 coins, 20 minutes
+            costs 40 coins, and 30 minutes costs 60 coins.
           </p>
-          {/* TODO: Razorpay integration — add billing terms (subscription start/cancel/prorate) once payment is live */}
           <p>
-            Subscription and payment terms will be updated here once billing is enabled.
+            <strong>All coins expire 28 days from the date they were granted or purchased.</strong>{" "}
+            This applies to free sign-up coins and purchased packs equally. Unused coins are
+            forfeited after expiry — no refunds or rollovers are provided. We will send an
+            email reminder 3 days before your coins expire.
+          </p>
+          <p>
+            Payments are processed securely by Razorpay. Deeksha does not store your card
+            details. All purchases are final; refunds are not provided for coin packs once
+            payment is confirmed. There is no auto-renewal — each purchase is a one-time
+            transaction.
           </p>
         </Section>
 
