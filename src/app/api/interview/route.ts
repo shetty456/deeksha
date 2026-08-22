@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient, createServiceClient } from "@/lib/supabase/server"
+import { COIN_COST, deductCoins } from "@/lib/coins"
 
 export async function POST(req: Request) {
   const supabase = await createClient()
@@ -16,6 +17,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 })
   }
 
+  const cost = COIN_COST[duration_target as number]
+  if (cost === undefined) {
+    return NextResponse.json({ error: "Invalid duration" }, { status: 400 })
+  }
+
   // Pick a question for this interview
   const { data: questions } = await supabase
     .from("questions")
@@ -25,7 +31,6 @@ export async function POST(req: Request) {
     .limit(20)
 
   if (!questions || questions.length === 0) {
-    // Fall back to any category questions
     const { data: fallback } = await supabase
       .from("questions")
       .select("id")
@@ -39,8 +44,8 @@ export async function POST(req: Request) {
 
   const serviceClient = await createServiceClient()
 
-  // Create the interview
-  const { data: interview, error } = await serviceClient
+  // Create the interview record first so we have an id for the ledger reference
+  const { data: interview, error: interviewError } = await serviceClient
     .from("interviews")
     .insert({
       user_id: user.id,
@@ -52,8 +57,18 @@ export async function POST(req: Request) {
     .select("id")
     .single()
 
-  if (error || !interview) {
+  if (interviewError || !interview) {
     return NextResponse.json({ error: "Failed to create interview" }, { status: 500 })
+  }
+
+  // Deduct coins — if insufficient, delete the interview and return 402
+  const ok = await deductCoins(serviceClient, user.id, cost, interview.id)
+  if (!ok) {
+    await serviceClient.from("interviews").delete().eq("id", interview.id)
+    return NextResponse.json(
+      { error: "insufficient_coins", cost, message: `This session costs ${cost} coins. Please top up to continue.` },
+      { status: 402 }
+    )
   }
 
   return NextResponse.json({ id: interview.id })
