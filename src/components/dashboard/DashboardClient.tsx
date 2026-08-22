@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
@@ -12,6 +12,7 @@ import {
   type Difficulty,
   type Duration,
 } from "@/lib/interview/categories"
+import { COIN_COST, type CoinBalance } from "@/lib/coins"
 import { cn } from "@/lib/utils"
 
 interface RecentInterview {
@@ -70,6 +71,38 @@ function ProgressDots({ current }: { current: number }) {
   )
 }
 
+function CoinChip({ balance, onBuy }: { balance: CoinBalance | null; onBuy: () => void }) {
+  if (!balance) return null
+
+  const daysLeft = balance.expiresAt
+    ? Math.ceil((new Date(balance.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null
+
+  const isLow      = balance.total < 20
+  const isExpiring = daysLeft !== null && daysLeft <= 7
+
+  return (
+    <button
+      onClick={onBuy}
+      className={cn(
+        "flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all",
+        isLow || isExpiring
+          ? "text-[#ff9f0a] border-[#ff9f0a]/40 bg-[#ff9f0a]/10"
+          : "text-label-secondary border-separator bg-bg-card hover:border-accent hover:text-accent"
+      )}
+    >
+      <span className="tabular-nums">{balance.total}</span>
+      <span>coins</span>
+      {isExpiring && daysLeft !== null && (
+        <span className="text-[10px] opacity-70">· {daysLeft}d left</span>
+      )}
+      {isLow && !isExpiring && (
+        <span className="text-[10px] opacity-70">· low</span>
+      )}
+    </button>
+  )
+}
+
 export default function DashboardClient({ user, recentInterviews }: Props) {
   const router = useRouter()
   const [step, setStep] = useState<Step>("home")
@@ -77,11 +110,24 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
   const [difficulty, setDifficulty] = useState<Difficulty>("medium")
   const [duration, setDuration] = useState<Duration>(600)
   const [starting, setStarting] = useState(false)
+  const [coinError, setCoinError] = useState<string | null>(null)
+  const [balance, setBalance] = useState<CoinBalance | null>(null)
 
   const displayName = user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "there"
   const hour = new Date().getHours()
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
   const stepIndex = STEP_ORDER.indexOf(step)
+
+  const fetchBalance = useCallback(async () => {
+    try {
+      const res = await fetch("/api/coins/balance")
+      if (res.ok) setBalance(await res.json())
+    } catch { /* silent */ }
+  }, [])
+
+  useEffect(() => {
+    fetchBalance()
+  }, [fetchBalance])
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -90,6 +136,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
   }
 
   async function handleStart() {
+    setCoinError(null)
     setStarting(true)
     try {
       const res = await fetch("/api/interview", {
@@ -97,6 +144,12 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category, difficulty, duration_target: duration }),
       })
+      if (res.status === 402) {
+        const { cost } = await res.json()
+        setCoinError(`You need ${cost} coins for this session. You have ${balance?.total ?? 0}.`)
+        setStep("duration")
+        return
+      }
       if (!res.ok) throw new Error()
       const { id } = await res.json()
       router.push(`/interview/${id}`)
@@ -106,10 +159,14 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
   }
 
   function goBack() {
+    setCoinError(null)
     if (step === "category") setStep("home")
     else if (step === "difficulty") setStep("category")
     else if (step === "duration") setStep("difficulty")
   }
+
+  const sessionCost = COIN_COST[duration]
+  const canAfford   = balance !== null && balance.total >= sessionCost
 
   // ── Home ────────────────────────────────────────────────
   if (step === "home") {
@@ -118,9 +175,12 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
         <nav className="sticky top-0 z-50 bg-bg-primary/80 backdrop-blur-xl border-b border-separator">
           <div className="max-w-lg mx-auto px-6 h-14 flex items-center justify-between">
             <span className="text-base font-semibold text-label-primary tracking-tight">Deeksha</span>
-            <button onClick={handleSignOut} className="text-sm text-label-secondary hover:text-destructive transition-colors">
-              Sign out
-            </button>
+            <div className="flex items-center gap-3">
+              <CoinChip balance={balance} onBuy={() => router.push("/pricing")} />
+              <button onClick={handleSignOut} className="text-sm text-label-secondary hover:text-destructive transition-colors">
+                Sign out
+              </button>
+            </div>
           </div>
         </nav>
 
@@ -129,6 +189,25 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
             <p className="text-sm text-label-secondary">{greeting}</p>
             <h1 className="text-2xl font-bold text-label-primary tracking-tight capitalize">{displayName}</h1>
           </div>
+
+          {/* Coin expiry warning */}
+          {balance && balance.expiresAt && (() => {
+            const daysLeft = Math.ceil((new Date(balance.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            if (daysLeft > 7) return null
+            return (
+              <div className="bg-[#ff9f0a]/10 rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
+                <p className="text-sm text-[#ff9f0a] font-medium">
+                  Your {balance.total} coins expire in {daysLeft} day{daysLeft !== 1 ? "s" : ""}. Use them or top up.
+                </p>
+                <button
+                  onClick={() => router.push("/pricing")}
+                  className="text-xs font-semibold text-[#ff9f0a] border border-[#ff9f0a]/50 px-3 py-1.5 rounded-lg hover:bg-[#ff9f0a]/10 transition-colors flex-shrink-0"
+                >
+                  Top up
+                </button>
+              </div>
+            )
+          })()}
 
           {/* Start CTA */}
           <div className="bg-accent rounded-2xl p-6 space-y-4">
@@ -193,9 +272,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
             ← {step === "category" ? "Home" : "Back"}
           </button>
           <ProgressDots current={stepIndex} />
-          <span className="text-xs text-label-tertiary tabular-nums">
-            {stepIndex + 1} / {STEP_ORDER.length}
-          </span>
+          <CoinChip balance={balance} onBuy={() => router.push("/pricing")} />
         </div>
       </nav>
 
@@ -296,41 +373,76 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
               <p className="text-sm text-label-secondary">The interviewer will wrap up within your window.</p>
             </div>
 
-            <div className="flex flex-col gap-3 flex-1">
-              {DURATIONS.map((d) => (
+            {coinError && (
+              <div className="bg-destructive/10 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                <p className="text-sm text-destructive">{coinError}</p>
                 <button
-                  key={d.seconds}
-                  onClick={() => setDuration(d.seconds)}
-                  className={cn(
-                    "flex items-center justify-between rounded-xl border px-5 py-5 text-left transition-all",
-                    duration === d.seconds
-                      ? "border-accent bg-accent/8 ring-1 ring-accent"
-                      : "border-separator bg-bg-card hover:border-accent/40"
-                  )}
+                  onClick={() => router.push("/pricing")}
+                  className="text-xs font-semibold text-destructive border border-destructive/40 px-3 py-1.5 rounded-lg flex-shrink-0"
                 >
-                  <div>
-                    <p className={cn("text-base font-semibold", duration === d.seconds ? "text-accent" : "text-label-primary")}>
-                      {d.label}
-                    </p>
-                    <p className="text-xs text-label-secondary mt-0.5">
-                      {d.seconds === 300  && "Quick sprint, tight back-and-forth"}
-                      {d.seconds === 600  && "Focused session, good depth"}
-                      {d.seconds === 1200 && "Standard interview length"}
-                      {d.seconds === 1800 && "Full deep-dive, senior-level pace"}
-                    </p>
-                  </div>
-                  {duration === d.seconds && <span className="text-accent text-base ml-4">✓</span>}
+                  Buy coins
                 </button>
-              ))}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 flex-1">
+              {DURATIONS.map((d) => {
+                const cost = COIN_COST[d.seconds]
+                const affordable = balance === null || balance.total >= cost
+                return (
+                  <button
+                    key={d.seconds}
+                    onClick={() => { setDuration(d.seconds); setCoinError(null) }}
+                    className={cn(
+                      "flex items-center justify-between rounded-xl border px-5 py-5 text-left transition-all",
+                      duration === d.seconds
+                        ? "border-accent bg-accent/8 ring-1 ring-accent"
+                        : "border-separator bg-bg-card hover:border-accent/40",
+                      !affordable && "opacity-50"
+                    )}
+                  >
+                    <div>
+                      <p className={cn("text-base font-semibold", duration === d.seconds ? "text-accent" : "text-label-primary")}>
+                        {d.label}
+                      </p>
+                      <p className="text-xs text-label-secondary mt-0.5">
+                        {d.seconds === 300  && "Quick sprint, tight back-and-forth"}
+                        {d.seconds === 600  && "Focused session, good depth"}
+                        {d.seconds === 1200 && "Standard interview length"}
+                        {d.seconds === 1800 && "Full deep-dive, senior-level pace"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={cn(
+                        "text-xs font-semibold tabular-nums px-2 py-1 rounded-md",
+                        affordable ? "text-label-secondary bg-bg-primary" : "text-destructive bg-destructive/10"
+                      )}>
+                        {cost} coins
+                      </span>
+                      {duration === d.seconds && <span className="text-accent text-base">✓</span>}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
 
-            <button
-              onClick={handleStart}
-              disabled={starting}
-              className="w-full bg-accent text-white font-semibold text-sm py-3.5 rounded-md hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-50"
-            >
-              {starting ? "Starting…" : "Start Interview →"}
-            </button>
+            <div className="space-y-3">
+              {balance !== null && !canAfford && (
+                <p className="text-xs text-label-tertiary text-center">
+                  You need {sessionCost} coins for this session.{" "}
+                  <button onClick={() => router.push("/pricing")} className="text-accent underline">
+                    Buy more coins →
+                  </button>
+                </p>
+              )}
+              <button
+                onClick={handleStart}
+                disabled={starting || !canAfford}
+                className="w-full bg-accent text-white font-semibold text-sm py-3.5 rounded-md hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-50"
+              >
+                {starting ? "Starting…" : canAfford ? `Start Interview · ${sessionCost} coins` : "Insufficient coins"}
+              </button>
+            </div>
           </div>
         )}
 
