@@ -165,8 +165,9 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
     else if (step === "duration") setStep("difficulty")
   }
 
-  const sessionCost = COIN_COST[duration]
-  const canAfford   = balance !== null && balance.total >= sessionCost
+  const sessionCost    = COIN_COST[duration]
+  const canAfford      = balance !== null && balance.total >= sessionCost
+  const hasAnyCoins    = balance === null || balance.total >= 10  // min cost for 5-min session
 
   // ── Home ────────────────────────────────────────────────
   if (step === "home") {
@@ -212,15 +213,33 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
           {/* Start CTA */}
           <div className="bg-accent rounded-2xl p-6 space-y-4">
             <div className="space-y-1">
-              <p className="text-white font-semibold text-lg">Ready to practice?</p>
-              <p className="text-white/70 text-sm">Pick a type, level, and duration — takes 10 seconds.</p>
+              {hasAnyCoins ? (
+                <>
+                  <p className="text-white font-semibold text-lg">Ready to practice?</p>
+                  <p className="text-white/70 text-sm">Pick a type, level, and duration — takes 10 seconds.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-white font-semibold text-lg">You&apos;re out of coins</p>
+                  <p className="text-white/70 text-sm">Top up to start your next interview session.</p>
+                </>
+              )}
             </div>
-            <button
-              onClick={() => setStep("category")}
-              className="bg-white text-accent font-semibold text-sm px-5 py-2.5 rounded-md hover:opacity-90 transition-opacity"
-            >
-              Start Interview →
-            </button>
+            {hasAnyCoins ? (
+              <button
+                onClick={() => setStep("category")}
+                className="bg-white text-accent font-semibold text-sm px-5 py-2.5 rounded-md hover:opacity-90 transition-opacity"
+              >
+                Start Interview →
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push("/pricing")}
+                className="bg-white text-accent font-semibold text-sm px-5 py-2.5 rounded-md hover:opacity-90 transition-opacity"
+              >
+                Buy Coins →
+              </button>
+            )}
           </div>
 
           {/* Recent */}
