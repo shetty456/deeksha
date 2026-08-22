@@ -157,7 +157,7 @@ export default function PricingPage() {
                         onClick={() => handleBuy(pack.id)}
                         disabled={purchasing !== null}
                         className={cn(
-                          "text-sm font-semibold px-4 py-2 rounded-lg transition-all",
+                          "text-sm font-semibold px-4 py-2 rounded-md transition-all",
                           isPopular
                             ? "bg-accent text-white hover:opacity-90"
                             : "bg-bg-primary border border-separator text-label-primary hover:border-accent hover:text-accent",

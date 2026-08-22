@@ -50,7 +50,7 @@ function ScorePill({ score }: { score: number }) {
     : score >= 6 ? "text-accent bg-accent/10"
     : "text-[#ff9f0a] bg-[#ff9f0a]/10"
   return (
-    <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-lg tabular-nums", cls)}>
+    <span className={cn("text-xs font-semibold px-2.5 py-1 rounded-full tabular-nums", cls)}>
       {score.toFixed(1)}
     </span>
   )
@@ -203,7 +203,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
                 </p>
                 <button
                   onClick={() => router.push("/pricing")}
-                  className="text-xs font-semibold text-[#ff9f0a] border border-[#ff9f0a]/50 px-3 py-1.5 rounded-lg hover:bg-[#ff9f0a]/10 transition-colors flex-shrink-0"
+                  className="text-xs font-semibold text-[#ff9f0a] border border-[#ff9f0a]/50 px-3 py-1.5 rounded-md hover:bg-[#ff9f0a]/10 transition-colors flex-shrink-0"
                 >
                   Top up
                 </button>
@@ -380,7 +380,7 @@ export default function DashboardClient({ user, recentInterviews }: Props) {
                 <p className="text-sm text-destructive">{coinError}</p>
                 <button
                   onClick={() => router.push("/pricing")}
-                  className="text-xs font-semibold text-destructive border border-destructive/40 px-3 py-1.5 rounded-lg flex-shrink-0"
+                  className="text-xs font-semibold text-destructive border border-destructive/40 px-3 py-1.5 rounded-md flex-shrink-0"
                 >
                   Buy coins
                 </button>

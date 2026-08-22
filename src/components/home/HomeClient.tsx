@@ -153,7 +153,7 @@ export default function HomeClient({ user, recentInterviews }: Props) {
           <button
             onClick={handleStart}
             disabled={starting}
-            className="w-full rounded-2xl bg-accent px-6 py-4 text-base font-semibold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="w-full rounded-md bg-accent px-6 py-4 text-base font-semibold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {starting ? "Starting…" : "Start Interview"}
           </button>

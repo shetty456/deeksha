@@ -98,12 +98,12 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <p className="text-xs text-destructive bg-destructive/8 rounded-md px-3 py-2.5">
+              <p className="text-xs text-destructive bg-destructive/8 rounded-xl px-3 py-2.5">
                 ⚠ {error}
               </p>
             )}
             {success && (
-              <p className="text-xs text-accent bg-accent/8 rounded-md px-3 py-2.5">
+              <p className="text-xs text-accent bg-accent/8 rounded-xl px-3 py-2.5">
                 ✓ {success}
               </p>
             )}
